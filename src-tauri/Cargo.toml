@@ -1,0 +1,42 @@
+[package]
+name = "termexo-fleet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Local-first AI fleet commander for orchestrating Termexo instances"
+
+[lib]
+name = "termexo_fleet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.1", features = [] }
+
+[dependencies]
+fleet-connector = { path = "../crates/fleet-connector" }
+fleet-mcp-server = { path = "../crates/fleet-mcp-server" }
+fleet-orchestrator = { path = "../crates/fleet-orchestrator" }
+fleet-protocol = { path = "../crates/fleet-protocol" }
+fleet-router = { path = "../crates/fleet-router" }
+reqwest.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.11.5", features = [] }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }

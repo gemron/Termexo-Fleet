@@ -1,0 +1,11 @@
+[package]
+name = "fleet-router"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+fleet-protocol = { path = "../fleet-protocol" }
+serde.workspace = true
+thiserror.workspace = true

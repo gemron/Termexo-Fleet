@@ -1,0 +1,35 @@
+{
+  "name": "termexo-fleet-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "ng": "node scripts/run-angular.mjs",
+    "start": "node scripts/run-angular.mjs serve",
+    "build": "node scripts/run-angular.mjs build",
+    "watch": "node scripts/run-angular.mjs build --watch --configuration development",
+    "test": "node scripts/run-angular.mjs test desktop-ui"
+  },
+  "dependencies": {
+    "@angular/common": "^22.2.3",
+    "@angular/compiler": "^22.2.3",
+    "@angular/core": "^22.2.3",
+    "@angular/forms": "^22.2.3",
+    "@angular/platform-browser": "^22.2.3",
+    "@tauri-apps/api": "^2.11.1",
+    "lucide": "^1.27.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.0.8",
+    "@angular/cli": "^22.0.8",
+    "@angular/compiler-cli": "^22.2.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tauri-apps/cli": "^2.11.4",
+    "daisyui": "^5.7.4",
+    "jsdom": "^28.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.8"
+  }
+}
