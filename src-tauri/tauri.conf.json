@@ -18,6 +18,8 @@
         "minWidth": 900,
         "minHeight": 600,
         "resizable": true,
+        "decorations": false,
+        "shadow": true,
         "center": true
       }
     ],
@@ -29,6 +31,11 @@
     "active": true,
     "targets": "all",
     "category": "DeveloperTool",
+    "shortDescription": "Local-first AI coding fleet commander for Termexo",
+    "longDescription": "Orchestrate one or more Termexo desktop instances with L1-L4 difficulty routing, autonomous sub-agent swarms, self-healing failover, and local execution cost analytics.",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

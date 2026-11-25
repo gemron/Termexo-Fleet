@@ -155,35 +155,19 @@ pub fn select_slot_across_fleet(
     }
 
     // Try with preferred_node_id first; if that node is offline/full, failover across the fleet.
-    let mut candidates = filter_candidates(&node_map, &node_active, slots, request, true, true);
+    let mut candidates = filter_candidates(&node_map, &node_active, slots, request, true);
     let mut failover_used = false;
     if candidates.is_empty() && request.preferred_node_id.is_some() {
-        candidates = filter_candidates(&node_map, &node_active, slots, request, true, false);
+        candidates = filter_candidates(&node_map, &node_active, slots, request, false);
         failover_used = !candidates.is_empty();
     }
 
-    let (chosen_pool, relaxed_family) = if !candidates.is_empty() {
-        (candidates, false)
-    } else if request.exclude_model_family.is_some() {
-        let relaxed = filter_candidates(&node_map, &node_active, slots, request, false, true);
-        if !relaxed.is_empty() {
-            (relaxed, true)
-        } else {
-            let failover_relaxed =
-                filter_candidates(&node_map, &node_active, slots, request, false, false);
-            failover_used = !failover_relaxed.is_empty();
-            (failover_relaxed, true)
-        }
-    } else {
-        (Vec::new(), false)
-    };
-
-    let best = chosen_pool
+    let best = candidates
         .into_iter()
         .max_by_key(|slot| score_slot(slot, request, &node_map, &node_active))
         .ok_or(RouterError::NoEligibleSlot(request.difficulty))?;
 
-    let reason = build_reason(best, request, relaxed_family, failover_used);
+    let reason = build_reason(best, request, failover_used);
     Ok(RouteDecision {
         slot_id: best.id.clone(),
         node_id: best.node_id.clone(),
@@ -236,7 +220,6 @@ fn filter_candidates<'a>(
     node_active: &HashMap<&str, u32>,
     slots: &'a [AccountModelSlot],
     request: &RouteRequest,
-    enforce_family_exclusion: bool,
     enforce_preferred_node: bool,
 ) -> Vec<&'a AccountModelSlot> {
     let filter_with_tier = |strict_tier: bool| -> Vec<&'a AccountModelSlot> {
@@ -272,9 +255,6 @@ fn filter_candidates<'a>(
                     || slot.supported_tiers.contains(&request.difficulty)
             })
             .filter(|slot| {
-                if !enforce_family_exclusion {
-                    return true;
-                }
                 request
                     .exclude_model_family
                     .as_deref()
@@ -329,12 +309,7 @@ fn score_slot(
     tier_match + mode_score + priority_bonus + node_headroom_bonus - load_penalty - cooldown_penalty
 }
 
-fn build_reason(
-    slot: &AccountModelSlot,
-    request: &RouteRequest,
-    relaxed_family: bool,
-    failover_used: bool,
-) -> String {
+fn build_reason(slot: &AccountModelSlot, request: &RouteRequest, failover_used: bool) -> String {
     let mut parts = vec![
         format!("tier={}", request.difficulty.as_str()),
         format!("mode={:?}", request.mode).to_ascii_lowercase(),
@@ -348,11 +323,7 @@ fn build_reason(
         parts.push(format!("tags=[{}]", request.required_node_tags.join(",")));
     }
     if let Some(excluded) = &request.exclude_model_family {
-        if relaxed_family {
-            parts.push(format!("cross_family_relaxed(no alternative to {excluded})"));
-        } else {
-            parts.push(format!("cross_family({}!={excluded})", slot.model_family));
-        }
+        parts.push(format!("cross_family({}!={excluded})", slot.model_family));
     }
     parts.join(" · ")
 }

@@ -86,8 +86,12 @@ impl FleetDatabase {
     }
 
     pub fn save_slot(&self, slot: &AccountModelSlot) -> Result<(), String> {
-        let json = serde_json::to_string(slot).map_err(|e| e.to_string())?;
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        Self::write_slot(&conn, slot)
+    }
+
+    fn write_slot(conn: &Connection, slot: &AccountModelSlot) -> Result<(), String> {
+        let json = serde_json::to_string(slot).map_err(|e| e.to_string())?;
         conn.execute(
             "INSERT INTO account_model_slots (id, node_id, payload_json) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET node_id = excluded.node_id, payload_json = excluded.payload_json",
@@ -101,9 +105,8 @@ impl FleetDatabase {
         self.list_json("SELECT payload_json FROM missions ORDER BY rowid DESC")
     }
 
-    pub fn save_mission(&self, mission: &Mission) -> Result<(), String> {
+    fn write_mission(conn: &Connection, mission: &Mission) -> Result<(), String> {
         let json = serde_json::to_string(mission).map_err(|e| e.to_string())?;
-        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "INSERT INTO missions (id, payload_json) VALUES (?1, ?2)
              ON CONFLICT(id) DO UPDATE SET payload_json = excluded.payload_json",
@@ -118,8 +121,19 @@ impl FleetDatabase {
     }
 
     pub fn save_task(&self, task: &MissionTask) -> Result<(), String> {
-        let json = serde_json::to_string(task).map_err(|e| e.to_string())?;
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        Self::write_task(&conn, task)
+    }
+
+    pub fn delete_task(&self, id: &str) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        conn.execute("DELETE FROM mission_tasks WHERE id = ?1", [id])
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn write_task(conn: &Connection, task: &MissionTask) -> Result<(), String> {
+        let json = serde_json::to_string(task).map_err(|e| e.to_string())?;
         conn.execute(
             "INSERT INTO mission_tasks (id, mission_id, payload_json) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET mission_id = excluded.mission_id, payload_json = excluded.payload_json",
@@ -127,6 +141,34 @@ impl FleetDatabase {
         )
         .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn save_mission_tasks(
+        &self,
+        mission: &Mission,
+        tasks: &[MissionTask],
+    ) -> Result<(), String> {
+        self.save_task_changes(tasks, Some(mission), None)
+    }
+
+    pub fn save_task_changes(
+        &self,
+        tasks: &[MissionTask],
+        mission: Option<&Mission>,
+        slot: Option<&AccountModelSlot>,
+    ) -> Result<(), String> {
+        let mut conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let transaction = conn.transaction().map_err(|e| e.to_string())?;
+        for task in tasks {
+            Self::write_task(&transaction, task)?;
+        }
+        if let Some(mission) = mission {
+            Self::write_mission(&transaction, mission)?;
+        }
+        if let Some(slot) = slot {
+            Self::write_slot(&transaction, slot)?;
+        }
+        transaction.commit().map_err(|e| e.to_string())
     }
 
     pub fn list_execution_records(&self) -> Result<Vec<ExecutionRecord>, String> {

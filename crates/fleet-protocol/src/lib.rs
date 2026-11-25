@@ -221,6 +221,7 @@ pub enum MissionStatus {
     Paused,
     Completed,
     Failed,
+    Cancelled,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,6 +237,15 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+impl TaskStatus {
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            Self::Queued | Self::Running | Self::WaitingInput | Self::WaitingApproval
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mission {
@@ -244,6 +254,7 @@ pub struct Mission {
     pub goal_prompt: String,
     pub node_id: String,
     pub workspace_id: String,
+    pub workspace_name: Option<String>,
     pub project_id: String,
     pub routing_mode: RoutingMode,
     #[serde(default)]
@@ -282,6 +293,7 @@ pub struct MissionTask {
     pub preferred_agent: Option<AgentType>,
     pub exclude_model_family: Option<String>,
     pub assigned_node_id: Option<String>,
+    pub assigned_workspace_id: Option<String>,
     pub assigned_slot_id: Option<String>,
     pub assigned_agent_type: Option<AgentType>,
     pub assigned_model_name: Option<String>,
@@ -290,6 +302,13 @@ pub struct MissionTask {
     pub routing_reason: Option<String>,
     pub termexo_task_id: Option<String>,
     pub termexo_terminal_id: Option<String>,
+    #[serde(default)]
+    pub terminal_stop_requested: bool,
+    pub terminal_start_sequence: Option<u64>,
+    pub terminal_initial_status: Option<String>,
+    pub provider_failure: Option<String>,
+    #[serde(default)]
+    pub isolate_worktree: bool,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
     pub status: TaskStatus,

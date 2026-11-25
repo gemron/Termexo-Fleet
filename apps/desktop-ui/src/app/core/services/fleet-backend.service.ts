@@ -489,6 +489,7 @@ const PREVIEW_OVERVIEW: FleetStateOverview = {
     notifyOnSlotUnhealthy: true,
   },
   mcpServerUrl: 'http://127.0.0.1:7425/mcp',
+  mcpRemoteUrl: null,
   mcpServerToken: 'tf_preview_token',
 };
 
@@ -818,8 +819,15 @@ export class FleetBackendService {
 
   async advanceMissionDag(missionId: string): Promise<void> {
     if (!this.desktop) return;
-    await invoke('advance_mission_dag', { missionId });
-    await this.refresh();
+    this.busy.set(true);
+    try {
+      await invoke('advance_mission_dag', { missionId });
+      await this.refresh();
+    } catch (err) {
+      this.error.set(err instanceof Error ? err.message : String(err));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   async replyTerminal(nodeId: string, terminalId: string, message: string): Promise<void> {
@@ -892,14 +900,36 @@ export class FleetBackendService {
     }
   }
 
-  buildTermexoMcpProfileSnippet(): string {
+  async saveMcpRemoteUrl(url: string): Promise<string | null> {
+    const endpoint = url.trim();
+    let saved: string | null = endpoint || null;
+    if (this.desktop) {
+      saved = await invoke<string | null>('save_fleet_mcp_remote_url', { url: endpoint });
+    } else if (endpoint) {
+      const parsed = new URL(endpoint);
+      const host = parsed.hostname.replace(/\.$/, '');
+      const local = host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host)
+        || ['0.0.0.0', '[::]', '[::1]'].includes(host);
+      if (
+        parsed.protocol !== 'https:' || local || parsed.username || parsed.password
+        || parsed.search || parsed.hash
+      ) {
+        throw new Error('请输入有效的 HTTPS MCP 地址');
+      }
+      saved = parsed.href;
+    }
+    this.overview.update((state) => ({ ...state, mcpRemoteUrl: saved }));
+    return saved;
+  }
+
+  buildTermexoMcpProfileSnippet(remote = false): string {
     const state = this.overview();
     return JSON.stringify(
       {
         mcpServers: {
           'termexo-fleet': {
             type: 'http',
-            url: state.mcpServerUrl,
+            url: remote ? state.mcpRemoteUrl : state.mcpServerUrl,
             headers: {
               Authorization: `Bearer ${state.mcpServerToken}`,
             },

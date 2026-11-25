@@ -22,3 +22,7 @@
 2. When launching a Mission in Termexo Fleet, select that MCP Profile. Fleet passes `mcpProfileIds` on `task_create` (supported in Termexo for Claude Code, Codex CLI, and OpenCode) and injects a signed `parent_token` into the parent task prompt.
 3. During execution, the parent agent calls `fleet_spawn_subagent(parent_token, title, goal, difficulty, isolate_worktree)`.
 4. Fleet verifies guardrails, selects the best node/account/model slot, creates an isolated Git worktree (`fleet/<subagent-id>`), creates and launches the child task on Termexo, and returns structured summaries and `git diff --stat` when `fleet_wait_subagents` completes.
+
+For LAN or VPN workers, forward a worker-reachable HTTPS endpoint to Fleet's local MCP URL and preserve the Authorization header and POST requests. In Fleet, open **Reverse MCP → Details → Remote Node**, save that HTTPS endpoint, and copy the remote JSON into the **Termexo Fleet** MCP profile on each worker. Fleet continues to listen on loopback. The **Local** option generates the profile for Termexo running on the Fleet machine.
+
+Give copies of the same project on different workers the same unique Termexo workspace name. Fleet matches that name when routing across nodes and stores the actual worker workspace for later status checks. Fleet creates isolated Git worktrees on local Termexo nodes. Set the Planner step's `isolateWorktree` to `false` when the step is intended for a remote node with its own checkout.

@@ -45,6 +45,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_fleet_overview,
+            commands::save_fleet_mcp_remote_url,
             commands::probe_fleet_node,
             commands::save_notification_settings,
             commands::send_test_notification,

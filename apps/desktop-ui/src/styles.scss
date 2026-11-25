@@ -5,8 +5,12 @@ body {
   background: var(--surface-0);
   color: var(--text);
   font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  overflow: hidden;
 }
 
 * {
@@ -14,8 +18,13 @@ body {
 }
 
 ::selection {
-  background: rgba(62, 198, 145, 0.28);
+  background: rgba(62, 198, 145, 0.3);
   color: #f4fff9;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(62, 198, 145, 0.65);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -28,64 +37,274 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(220, 238, 230, 0.12);
   border-radius: 999px;
 
   &:hover {
-    background: rgba(62, 198, 145, 0.45);
+    background: rgba(62, 198, 145, 0.48);
   }
 }
 
+/* Unified Precision Form Controls */
 input.input,
 select.select,
 textarea.textarea {
-  background: rgba(11, 16, 15, 0.72);
-  border-color: rgba(255, 255, 255, 0.09);
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  background-color: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 12.5px;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: rgba(220, 238, 230, 0.24);
+  }
 
   &:focus {
     outline: none;
-    border-color: rgba(62, 198, 145, 0.62);
-    background: rgba(13, 21, 19, 0.92);
+    border-color: rgba(62, 198, 145, 0.65);
+    background-color: rgba(8, 14, 12, 0.96);
     box-shadow: 0 0 0 3px rgba(62, 198, 145, 0.14);
   }
 }
 
+select.select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ab3a8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 12px 12px;
+  cursor: pointer;
+}
+
+select.select option {
+  background-color: #0e1513;
+  color: #e6efea;
+}
+
+/* Cohesive Bespoke Button System (Overrides harsh DaisyUI defaults) */
 .btn {
-  transition: transform 120ms ease, box-shadow 160ms ease, background 150ms ease, border-color 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    transform 110ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 160ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 
   &:active:not(:disabled) {
-    transform: translateY(1px);
+    transform: translateY(1px) scale(0.99);
+  }
+
+  &:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &.btn-xs {
+    height: 26px;
+    min-height: 26px;
+    padding: 0 9px;
+    font-size: 11.5px;
+    border-radius: 7px;
+  }
+
+  &.btn-sm {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 13px;
+    font-size: 12px;
+    border-radius: 9px;
   }
 }
 
 .btn-primary:not(.btn-outline) {
-  background: linear-gradient(135deg, #3ec691, #2ea89a);
-  border-color: rgba(120, 240, 195, 0.35);
-  color: #041911;
+  background: linear-gradient(135deg, #43ce98 0%, #2ab192 100%);
+  border-color: rgba(140, 245, 206, 0.36);
+  color: #031910;
   font-weight: 600;
-  box-shadow: 0 6px 20px rgba(46, 184, 138, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 6px 20px rgba(46, 184, 138, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
 
   &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #4bd69f, #35bca9);
-    box-shadow: 0 8px 26px rgba(46, 184, 138, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+    background: linear-gradient(135deg, #52dca6 0%, #32c3a1 100%);
+    box-shadow:
+      0 8px 26px rgba(46, 184, 138, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
   }
 }
 
-.fleet-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-1);
+.btn-outline {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(220, 238, 230, 0.16);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.075);
+    border-color: rgba(220, 238, 230, 0.28);
+    color: #ffffff;
+  }
+
+  &.btn-primary {
+    background: rgba(62, 198, 145, 0.1);
+    border-color: rgba(62, 198, 145, 0.36);
+    color: #6ce5b6;
+
+    &:hover:not(:disabled) {
+      background: rgba(62, 198, 145, 0.2);
+      border-color: rgba(62, 198, 145, 0.62);
+      color: #b4ffe1;
+    }
+  }
+
+  &.btn-warning {
+    background: rgba(242, 180, 68, 0.11);
+    border-color: rgba(242, 180, 68, 0.38);
+    color: #f8c96b;
+
+    &:hover:not(:disabled) {
+      background: rgba(242, 180, 68, 0.2);
+      border-color: rgba(242, 180, 68, 0.62);
+      color: #ffe2a4;
+    }
+  }
+
+  &.btn-success {
+    background: rgba(82, 203, 132, 0.12);
+    border-color: rgba(82, 203, 132, 0.4);
+    color: #7ee3a7;
+
+    &:hover:not(:disabled) {
+      background: rgba(82, 203, 132, 0.22);
+      border-color: rgba(82, 203, 132, 0.65);
+    }
+  }
 }
 
-.fleet-pill {
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+  }
+
+  &.text-error {
+    color: #f5887f;
+
+    &:hover:not(:disabled) {
+      background: rgba(242, 109, 99, 0.14);
+      color: #ffb0a9;
+    }
+  }
+}
+
+/* Tactile iOS/Linear-grade Switch Control (replaces invisible dark checkboxes) */
+.ui-switch {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font: 11px/1.4 var(--mono);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-secondary);
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .switch-track {
+    position: relative;
+    width: 34px;
+    height: 19px;
+    border-radius: 999px;
+    background: rgba(220, 238, 230, 0.13);
+    border: 1px solid rgba(220, 238, 230, 0.16);
+    flex-shrink: 0;
+    transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      background: #c7d6cf;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms ease;
+    }
+  }
+
+  input[type='checkbox']:checked + .switch-track {
+    background: linear-gradient(135deg, #3ec691, #2ab192);
+    border-color: rgba(140, 245, 206, 0.45);
+    box-shadow: 0 0 12px rgba(62, 198, 145, 0.3);
+
+    &::after {
+      transform: translateX(15px);
+      background: #031910;
+    }
+  }
+
+  input[type='checkbox']:focus-visible + .switch-track {
+    box-shadow: 0 0 0 3px rgba(62, 198, 145, 0.28);
+  }
+
+  .switch-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.spin {
+  animation: fleet-spin 0.9s linear infinite;
+}
+
+@keyframes fleet-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

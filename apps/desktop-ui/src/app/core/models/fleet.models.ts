@@ -7,7 +7,7 @@ export type WorkflowTemplate = 'direct' | 'implement_verify_review' | 'planner_d
 export type TaskRole = 'planner' | 'worker' | 'reviewer' | 'shell';
 export type ExecutionMode = 'task' | 'terminal';
 export type SlotHealth = 'healthy' | 'rate_limited' | 'auth_expired' | 'disabled';
-export type MissionStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed';
+export type MissionStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 export type TaskStatus =
   | 'pending'
   | 'queued'
@@ -226,6 +226,7 @@ export interface MissionTask {
   routingReason: string | null;
   termexoTaskId: string | null;
   termexoTerminalId: string | null;
+  terminalStopRequested?: boolean;
   worktreePath: string | null;
   worktreeBranch: string | null;
   status: TaskStatus;
@@ -263,6 +264,7 @@ export interface FleetStateOverview {
   analytics: FleetAnalytics;
   notificationSettings: NotificationSettings;
   mcpServerUrl: string;
+  mcpRemoteUrl: string | null;
   mcpServerToken: string;
 }
 

@@ -1,0 +1,366 @@
+name: Release Desktop & npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release version tag (e.g. v0.2.0 or v0.2.0-preview.1). Defaults to package.json version.'
+        required: false
+        type: string
+      publish_npm:
+        description: 'Publish termexo-fleet CLI launcher to npmjs.org'
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: 'Build all platforms and verify npm pack without publishing Release or npm'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate & Resolve Release Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      npm_dist_tag: ${{ steps.meta.outputs.npm_dist_tag }}
+      publish_npm: ${{ steps.meta.outputs.publish_npm }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+
+      - name: Resolve release version metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+            PUBLISH_NPM="true"
+            DRY_RUN="false"
+          else
+            INPUT_TAG="${{ inputs.tag }}"
+            if [ -n "$INPUT_TAG" ]; then
+              TAG="$INPUT_TAG"
+            else
+              PKG_VER="$(node -p "require('./package.json').version")"
+              TAG="v${PKG_VER}"
+            fi
+            PUBLISH_NPM="${{ inputs.publish_npm }}"
+            DRY_RUN="${{ inputs.dry_run }}"
+          fi
+
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid SemVer release tag: $TAG" >&2
+            exit 1
+          fi
+
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE="true"
+            NPM_DIST_TAG="next"
+          else
+            PRERELEASE="false"
+            NPM_DIST_TAG="latest"
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=$PUBLISH_NPM" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved release: tag=$TAG version=$VERSION prerelease=$PRERELEASE npm_dist_tag=$NPM_DIST_TAG dry_run=$DRY_RUN"
+
+      - name: Install frontend dependencies & run tests
+        run: |
+          npm --prefix apps/desktop-ui ci
+          npm run build
+          npm test
+          npm run test:npm
+
+  build-desktop:
+    name: Build (${{ matrix.target_key }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_key: linux-x64
+            os: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+          - target_key: macos-arm64
+            os: macos-14
+            rust_target: aarch64-apple-darwin
+          - target_key: macos-x64
+            os: macos-14
+            rust_target: x86_64-apple-darwin
+          - target_key: windows-x64
+            os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+
+      - name: Install Linux Tauri build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            libsecret-1-dev \
+            libfuse2 \
+            rpm \
+            squashfs-tools
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target_key }}
+
+      - name: Sync release version into manifests
+        run: node scripts/release-sync-version.mjs "${{ needs.validate.outputs.version }}"
+
+      - name: Install frontend dependencies
+        run: npm --prefix apps/desktop-ui ci
+
+      - name: Build Tauri 2 desktop application (${{ matrix.target_key }})
+        env:
+          CI: 'true'
+          NO_STRIP: 'true'
+        run: node scripts/run-tauri.mjs build --target "${{ matrix.rust_target }}"
+
+      - name: Package Linux artifacts (.deb, .rpm, .AppImage, portable .tar.gz)
+        if: matrix.target_key == 'linux-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="dist-artifacts/${{ matrix.target_key }}"
+          mkdir -p "$OUT"
+          REL="target/${{ matrix.rust_target }}/release"
+
+          shopt -s nullglob
+          for f in "$REL"/bundle/deb/*.deb "$REL"/bundle/rpm/*.rpm "$REL"/bundle/appimage/*.AppImage; do
+            base="$(basename "$f" | tr ' ' '-')"
+            cp "$f" "$OUT/$base"
+          done
+
+          tar -czf "$OUT/termexo-fleet-linux-x64.tar.gz" -C "$REL" termexo-fleet
+          ls -lh "$OUT"
+
+      - name: Package macOS artifacts (.dmg, portable .tar.gz)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="dist-artifacts/${{ matrix.target_key }}"
+          mkdir -p "$OUT"
+          REL="target/${{ matrix.rust_target }}/release"
+          VER="${{ needs.validate.outputs.version }}"
+
+          shopt -s nullglob
+          for f in "$REL"/bundle/dmg/*.dmg; do
+            cp "$f" "$OUT/Termexo-Fleet_${VER}_${{ matrix.target_key }}.dmg"
+          done
+
+          tar -czf "$OUT/termexo-fleet-${{ matrix.target_key }}.tar.gz" -C "$REL/bundle/macos" "Termexo Fleet.app"
+          ls -lh "$OUT"
+
+      - name: Package Windows artifacts (.exe, .msi, portable .zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = "dist-artifacts/${{ matrix.target_key }}"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $rel = "target/${{ matrix.rust_target }}/release"
+
+          Get-ChildItem "$rel/bundle/nsis/*.exe", "$rel/bundle/msi/*.msi" -ErrorAction SilentlyContinue | ForEach-Object {
+            $clean = $_.Name -replace ' ', '-'
+            Copy-Item $_.FullName (Join-Path $out $clean)
+          }
+
+          Compress-Archive -Path "$rel/termexo-fleet.exe" -DestinationPath "$out/termexo-fleet-windows-x64.zip" -Force
+          Get-ChildItem $out
+
+      - name: Upload platform release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target_key }}
+          path: dist-artifacts/${{ matrix.target_key }}/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - build-desktop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Download all platform build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt & npm release manifest
+        run: |
+          node scripts/prepare-npm-release.mjs \
+            --version "${{ needs.validate.outputs.version }}" \
+            --tag "${{ needs.validate.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --assets-dir release-assets
+          ls -lh release-assets
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Run npm launcher tests
+        run: npm run test:npm
+
+      - name: Verify packages/npm pack contents
+        working-directory: packages/npm
+        run: npm pack --dry-run
+
+      - name: Upload prepared npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package-prepared
+          path: packages/npm
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        if: needs.validate.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          NOTES=$(cat <<EOF
+          ## Termexo Fleet ${TAG}
+
+          Cross-platform desktop installers & portable archives for **Windows (x64)**, **macOS (Apple Silicon & Intel)**, and **Linux (x64)**.
+
+          ### Quick Run via npm (Node.js 18.18+)
+          \`\`\`bash
+          npx termexo-fleet@${VERSION}
+          # or install globally
+          npm install -g termexo-fleet@${VERSION}
+          termexo-fleet
+          \`\`\`
+
+          ### Direct Desktop Downloads
+          - **macOS (Apple Silicon / M1–M4)**: \`Termexo-Fleet_${VERSION}_macos-arm64.dmg\`
+          - **macOS (Intel)**: \`Termexo-Fleet_${VERSION}_macos-x64.dmg\`
+          - **Linux (Debian / Ubuntu)**: \`*.deb\` · **Fedora / RHEL**: \`*.rpm\` · **Portable**: \`*.AppImage\`
+          - **Windows (x64)**: \`*-setup.exe\` (NSIS) or \`*.msi\`
+
+          All portable archives are verified by \`SHA256SUMS.txt\`.
+          EOF
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+            gh release edit "$TAG" --title "Termexo Fleet $TAG" --notes "$NOTES"
+          else
+            EXTRA_ARGS=()
+            if [ "$PRERELEASE" = "true" ]; then
+              EXTRA_ARGS+=(--prerelease)
+            fi
+            gh release create "$TAG" release-assets/* \
+              --target "$COMMIT_SHA" \
+              --title "Termexo Fleet $TAG" \
+              --notes "$NOTES" \
+              --generate-notes \
+              "${EXTRA_ARGS[@]}"
+          fi
+
+  publish-npm:
+    name: Publish termexo-fleet to npm
+    needs:
+      - validate
+      - publish-release
+    if: needs.validate.outputs.dry_run != 'true' && needs.validate.outputs.publish_npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Download prepared npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package-prepared
+          path: packages/npm
+
+      - name: Upgrade npm CLI for native OIDC Trusted Publishing
+        run: npm install -g npm@latest
+
+      - name: Publish termexo-fleet to npmjs.org
+        working-directory: packages/npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ needs.validate.outputs.npm_dist_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "Publishing termexo-fleet via NPM_TOKEN (tag: $NPM_DIST_TAG)..."
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > .npmrc
+            npm publish --access public --tag "$NPM_DIST_TAG" --provenance
+            rm -f .npmrc
+          else
+            echo "Publishing termexo-fleet via GitHub OIDC Trusted Publishing (tag: $NPM_DIST_TAG)..."
+            npm publish --access public --tag "$NPM_DIST_TAG" --provenance
+          fi

@@ -397,6 +397,13 @@ impl TermexoMcpClient {
         serde_json::from_value(value).map_err(|e| ConnectorError::InvalidPayload(e.to_string()))
     }
 
+    pub async fn supports_task_mcp_profiles(&self) -> Option<bool> {
+        self.discover_capabilities().await;
+        let caps = self.capabilities.read().await;
+        caps.discovered
+            .then_some(caps.task_create_supports_mcp_profiles)
+    }
+
     async fn discover_capabilities(&self) {
         if self.capabilities.read().await.discovered {
             return;

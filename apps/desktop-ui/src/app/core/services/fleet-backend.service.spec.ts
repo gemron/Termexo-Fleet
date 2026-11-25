@@ -59,6 +59,11 @@ describe('FleetBackendService', () => {
 
     const snippet = JSON.parse(service.buildTermexoMcpProfileSnippet());
     expect(snippet.mcpServers['termexo-fleet'].url).toContain('/mcp');
+    await expect(service.saveMcpRemoteUrl('https://127.0.0.1/mcp')).rejects.toThrow();
+    await service.saveMcpRemoteUrl('https://fleet.example.net/mcp');
+    const remote = JSON.parse(service.buildTermexoMcpProfileSnippet(true));
+    expect(remote.mcpServers['termexo-fleet'].url).toBe('https://fleet.example.net/mcp');
+    expect(JSON.parse(service.buildTermexoMcpProfileSnippet())).toEqual(snippet);
 
     // Phase 3: connectivity probe, analytics ledger & notification settings
     const probe = await service.probeNode('https://192.168.1.50:7421/mcp', 'tok', true);

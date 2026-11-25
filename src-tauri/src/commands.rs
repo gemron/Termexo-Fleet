@@ -15,6 +15,14 @@ pub async fn get_fleet_overview(
 }
 
 #[tauri::command]
+pub fn save_fleet_mcp_remote_url(
+    url: String,
+    runtime: State<'_, Arc<FleetRuntime>>,
+) -> Result<Option<String>, String> {
+    runtime.save_mcp_remote_url(&url)
+}
+
+#[tauri::command]
 pub async fn probe_fleet_node(
     endpoint: String,
     token: String,

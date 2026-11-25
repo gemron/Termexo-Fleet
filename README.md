@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1"><img alt="Version 0.1.0-preview.1" src="https://img.shields.io/badge/version-0.1.0--preview.1-3ec691"></a>
-  <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows">
+  <a href="https://github.com/gemron/Termexo-Fleet/releases"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-3ec691"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-Workspace-DEA584?logo=rust&logoColor=black">
   <img alt="Angular 22" src="https://img.shields.io/badge/Angular-22-DD0031?logo=angular">
@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://www.termexo.com/#fleet">Website Showcase</a> ·
-  <a href="https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1">Download Preview</a> ·
+  <a href="https://github.com/gemron/Termexo-Fleet/releases">Downloads</a> ·
   <a href="./docs/preview/PREVIEW.md">Product Preview Dossier</a> ·
   <a href="https://github.com/gemron/Termexo">Termexo Workbench</a>
 </p>
@@ -152,12 +152,27 @@ Termexo-Fleet/
 
 ## Quick Start
 
-### Option 1: Install Preview Binary (Windows x64)
-Download from **[Releases (`v0.1.0-preview.1`)](https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1)**:
-- `Termexo.Fleet_0.1.0_x64-setup.exe` (NSIS installer, recommended)
-- `Termexo.Fleet_0.1.0_x64_en-US.msi` (MSI package)
+### Option 1: Launch via npm (Windows, macOS & Linux)
+Requires Node.js `18.18+`:
 
-### Option 2: Run from Source
+```bash
+# Run directly
+npx termexo-fleet@latest
+
+# Or install globally
+npm install --global termexo-fleet
+termexo-fleet
+```
+
+### Option 2: Download Desktop Installers
+Download from **[GitHub Releases](https://github.com/gemron/Termexo-Fleet/releases)**:
+- **Windows (x64)**: `Termexo-Fleet_<version>_x64-setup.exe` (NSIS) / `.msi`
+- **macOS (Apple Silicon & Intel)**: `Termexo-Fleet_<version>_macos-arm64.dmg` / `macos-x64.dmg`
+- **Linux (x64)**: `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.AppImage`
+
+> Release & GitHub Actions publishing workflow documentation: [docs/releases.md](./docs/releases.md).
+
+### Option 3: Run from Source
 
 ```bash
 # Install frontend dependencies

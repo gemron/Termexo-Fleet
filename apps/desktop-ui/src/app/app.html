@@ -1,1385 +1,2122 @@
-<div class="fleet-shell">
+<div
+  class="fleet-shell"
+  [class.sidebar-collapsed]="sidebarCollapsed()"
+  [class.is-desktop]="backend.desktop"
+  [class.is-maximized]="windowMaximized()"
+>
+  <!-- Left Precision Sidebar -->
   <aside class="fleet-sidebar">
-    <div class="brand">
-      <div class="brand-halo">
+    <div class="brand" data-tauri-drag-region>
+      <div class="brand-halo" (click)="activeTab.set('missions')" title="返回任务指挥甲板">
         <img src="fleet-mark.svg" alt="Termexo Fleet" class="brand-mark" />
       </div>
-      <div class="min-w-0 flex-1">
-        <div class="brand-title">Termexo Fleet</div>
-        <div class="brand-sub">AI 舰队指挥中枢</div>
-      </div>
+      @if (!sidebarCollapsed()) {
+        <div class="brand-meta" data-tauri-drag-region>
+          <div class="brand-title" data-tauri-drag-region>Termexo Fleet</div>
+          <div class="brand-sub" data-tauri-drag-region>AI 舰队指挥中枢</div>
+        </div>
+      }
+      <button
+        type="button"
+        class="sidebar-collapse-btn"
+        (click)="toggleSidebar()"
+        [title]="sidebarCollapsed() ? '展开侧边栏 ([)' : '收起侧边栏 ([)'"
+        [attr.aria-label]="sidebarCollapsed() ? '展开侧边栏' : '收起侧边栏'"
+      >
+        <fleet-icon [name]="sidebarCollapsed() ? 'chevron-right' : 'panel-left'" [size]="15" />
+      </button>
     </div>
 
     <button
       type="button"
       class="cmd-trigger-btn"
-      (click)="commandQuery.set(''); commandPaletteOpen.set(true)"
+      (click)="openCommandPalette()"
+      title="打开全局命令面板 (Ctrl+K)"
     >
-      <span class="flex items-center gap-2">
-        <fleet-icon name="search" [size]="13" />
-        <span>快速跳转与指令</span>
+      <span class="cmd-trigger-left">
+        <fleet-icon name="search" [size]="14" />
+        @if (!sidebarCollapsed()) {
+          <span>快速跳转与指令</span>
+        }
       </span>
-      <kbd class="kbd-chip">Ctrl K</kbd>
+      @if (!sidebarCollapsed()) {
+        <kbd class="kbd-chip">Ctrl K</kbd>
+      }
     </button>
 
-    <div class="nav-group-label">指挥视图</div>
-    <nav class="nav-list">
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'missions'"
-        (click)="activeTab.set('missions')"
-      >
-        <span class="nav-left">
-          <fleet-icon name="workflow" [size]="16" />
-          <span>任务指挥甲板</span>
-        </span>
-        <span class="nav-count" [class.live]="runningTaskCount() > 0">{{ runningTaskCount() }}</span>
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'tree'"
-        (click)="activeTab.set('tree')"
-      >
-        <span class="nav-left">
-          <fleet-icon name="tree" [size]="16" />
-          <span>子 Agent 蜂群树</span>
-        </span>
-        <span class="nav-count">{{ backend.tasks().length }}</span>
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'routing'"
-        (click)="activeTab.set('routing')"
-      >
-        <span class="nav-left">
-          <fleet-icon name="route" [size]="16" />
-          <span>难度天梯与账号池</span>
-        </span>
-        <span class="nav-count">{{ backend.slots().length }}</span>
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'inbox'"
-        (click)="activeTab.set('inbox')"
-      >
-        <span class="nav-left">
-          <fleet-icon name="inbox" [size]="16" />
-          <span>全局待办收件箱</span>
-        </span>
-        @if (backend.attention().length > 0) {
-          <span class="nav-count warn">{{ backend.attention().length }}</span>
-        }
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'nodes'"
-        (click)="activeTab.set('nodes')"
-      >
-        <span class="nav-left">
-          <fleet-icon name="radar" [size]="16" />
-          <span>多机舰队拓扑</span>
-        </span>
-        <span class="nav-count" [class.live]="onlineNodeCount() > 0">
-          {{ onlineNodeCount() }}/{{ backend.nodes().length }}
-        </span>
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="activeTab() === 'analytics'"
-        (click)="openAnalyticsTab()"
-      >
-        <span class="nav-left">
-          <fleet-icon name="chart" [size]="16" />
-          <span>效能账本与通知</span>
-        </span>
-        @if (backend.analytics().totalRuns > 0) {
-          <span class="nav-count live">{{ backend.analytics().estimatedSavingsPercent }}% 省</span>
-        }
-      </button>
-    </nav>
+    <div class="nav-scroll">
+      @if (!sidebarCollapsed()) {
+        <div class="nav-group-label">调度中心</div>
+      }
+      <nav class="nav-list" aria-label="调度中心">
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'missions'"
+          (click)="activeTab.set('missions')"
+          title="任务指挥甲板 (Alt+1)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="workflow" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>任务指挥甲板</span>
+            }
+          </span>
+          @if (!sidebarCollapsed()) {
+            <span class="nav-count" [class.live]="runningTaskCount() > 0">{{ runningTaskCount() }}</span>
+          } @else if (runningTaskCount() > 0) {
+            <span class="nav-mini-dot live"></span>
+          }
+        </button>
 
-    <div class="sidebar-mcp-card">
-      <div class="flex items-center justify-between mb-1.5">
-        <span class="mcp-card-title">
-          <span class="pulse-dot green live-ring"></span>
-          反向 MCP 引擎
-        </span>
-        <div class="flex items-center gap-2">
-          <button type="button" class="link-btn" title="一键复制 JSON" (click)="copyFleetMcpConfig()">复制</button>
-          <button type="button" class="link-btn" (click)="mcpDrawerOpen.set(true)">详情</button>
-        </div>
-      </div>
-      <div class="mcp-card-url">{{ backend.overview().mcpServerUrl }}</div>
-      <div class="mcp-card-hint">供父 Agent 派生子 Agent 与提交 DAG</div>
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'tree'"
+          (click)="activeTab.set('tree')"
+          title="子 Agent 蜂群树 (Alt+2)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="tree" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>子 Agent 蜂群树</span>
+            }
+          </span>
+          @if (!sidebarCollapsed()) {
+            <span class="nav-count">{{ backend.tasks().length }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'inbox'"
+          (click)="activeTab.set('inbox')"
+          title="全局待办收件箱 (Alt+3)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="inbox" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>全局待办收件箱</span>
+            }
+          </span>
+          @if (backend.attention().length > 0) {
+            @if (!sidebarCollapsed()) {
+              <span class="nav-count warn">{{ backend.attention().length }}</span>
+            } @else {
+              <span class="nav-mini-dot warn"></span>
+            }
+          }
+        </button>
+      </nav>
+
+      @if (!sidebarCollapsed()) {
+        <div class="nav-group-label mt-4">算力与观测</div>
+      } @else {
+        <div class="nav-divider"></div>
+      }
+      <nav class="nav-list" aria-label="算力与观测">
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'routing'"
+          (click)="activeTab.set('routing')"
+          title="难度天梯与账号池 (Alt+4)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="route" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>难度天梯与账号池</span>
+            }
+          </span>
+          @if (!sidebarCollapsed()) {
+            <span class="nav-count" [class.warn]="unhealthySlotCount() > 0">
+              {{ backend.slots().length }}
+            </span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'nodes'"
+          (click)="activeTab.set('nodes')"
+          title="多机舰队拓扑 (Alt+5)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="radar" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>多机舰队拓扑</span>
+            }
+          </span>
+          @if (!sidebarCollapsed()) {
+            <span class="nav-count" [class.live]="onlineNodeCount() > 0">
+              {{ onlineNodeCount() }}/{{ backend.nodes().length }}
+            </span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeTab() === 'analytics'"
+          (click)="openAnalyticsTab()"
+          title="效能账本与通知 (Alt+6)"
+        >
+          <span class="nav-left">
+            <fleet-icon name="chart" [size]="16" />
+            @if (!sidebarCollapsed()) {
+              <span>效能账本与通知</span>
+            }
+          </span>
+          @if (!sidebarCollapsed() && backend.analytics().totalRuns > 0) {
+            <span class="nav-count live">-{{ backend.analytics().estimatedSavingsPercent }}%</span>
+          }
+        </button>
+      </nav>
     </div>
 
+    <!-- Reverse MCP Engine Card -->
+    @if (!sidebarCollapsed()) {
+      <div class="sidebar-mcp-card">
+        <div class="mcp-card-head">
+          <span class="mcp-card-title">
+            <span class="pulse-dot green live-ring"></span>
+            <span>反向 MCP 引擎</span>
+          </span>
+          <div class="mcp-card-btns">
+            <button
+              type="button"
+              class="icon-micro-btn"
+              [class.copied]="isCopied('mcp-local')"
+              title="一键复制反向 MCP JSON"
+              (click)="copyFleetMcpConfig()"
+            >
+              <fleet-icon [name]="isCopied('mcp-local') ? 'check' : 'copy'" [size]="12" />
+            </button>
+            <button
+              type="button"
+              class="icon-micro-btn"
+              title="配置反向 MCP 接入详情"
+              (click)="openMcpDrawer()"
+            >
+              <fleet-icon name="sliders" [size]="12" />
+            </button>
+          </div>
+        </div>
+        <div class="mcp-card-url" [title]="backend.overview().mcpServerUrl">
+          {{ backend.overview().mcpServerUrl }}
+        </div>
+        <div class="mcp-card-hint">供父 Agent 派生子 Agent 与提交 DAG</div>
+      </div>
+    } @else {
+      <button
+        type="button"
+        class="sidebar-mcp-mini"
+        title="反向 MCP 引擎配置"
+        (click)="openMcpDrawer()"
+      >
+        <span class="pulse-dot green live-ring"></span>
+      </button>
+    }
+
     <div class="sidebar-footer">
-      <div class="runtime-badge">
-        <span class="pulse-dot" [class.green]="onlineNodeCount() > 0" [class.red]="onlineNodeCount() === 0"></span>
-        <span>{{ backend.desktop ? '桌面端实时模式' : '浏览器预览模式' }}</span>
+      <div class="runtime-badge" [title]="backend.desktop ? '桌面端实时模式' : '浏览器预览模式'">
+        <span
+          class="pulse-dot"
+          [class.green]="onlineNodeCount() > 0"
+          [class.red]="onlineNodeCount() === 0"
+        ></span>
+        @if (!sidebarCollapsed()) {
+          <span>{{ backend.desktop ? '桌面端实时模式' : '浏览器预览模式' }}</span>
+        }
       </div>
     </div>
   </aside>
 
+  <!-- Main Workspace -->
   <div class="fleet-workspace">
-    <header class="telemetry-bar">
-      <div class="telemetry-pills">
-        <button type="button" class="telemetry-pill clickable" (click)="activeTab.set('nodes')">
-          <span
-            class="pulse-dot"
-            [class.green]="onlineNodeCount() > 0"
-            [class.live-ring]="onlineNodeCount() > 0"
-            [class.red]="onlineNodeCount() === 0"
-          ></span>
-          <span>在线 Termexo</span>
-          <strong>{{ onlineNodeCount() }} / {{ backend.nodes().length }}</strong>
-        </button>
-        <button type="button" class="telemetry-pill clickable" (click)="activeTab.set('missions')">
-          <fleet-icon name="bolt" [size]="13" />
-          <span>活跃 Agent</span>
-          <strong>{{ runningTaskCount() }} / {{ totalNodeCapacity() }}</strong>
-        </button>
-        <button type="button" class="telemetry-pill clickable" (click)="activeTab.set('routing')">
-          <fleet-icon name="shield" [size]="13" />
-          <span>账号健康率</span>
-          <strong>{{ healthySlotRate() }}%</strong>
-        </button>
-        @if (backend.analytics().totalRuns > 0) {
-          <button type="button" class="telemetry-pill clickable savings-pill" (click)="openAnalyticsTab()">
-            <fleet-icon name="chart" [size]="13" />
-            <span>路由节省</span>
-            <strong>{{ backend.analytics().estimatedSavingsPercent }}%</strong>
+    <!-- Unified 54px Sticky Command Header (Frameless Window Drag Bar) -->
+    <header class="telemetry-bar" data-tauri-drag-region>
+      <div class="header-identity" data-tauri-drag-region>
+        <span class="header-view-icon" data-tauri-drag-region>
+          <fleet-icon [name]="activeViewMeta().icon" [size]="15" />
+        </span>
+        <div class="min-w-0" data-tauri-drag-region>
+          <div class="header-view-title" data-tauri-drag-region>{{ activeViewMeta().title }}</div>
+        </div>
+      </div>
+
+      <div class="header-drag-spacer" data-tauri-drag-region></div>
+
+      <div class="header-right">
+        <div class="telemetry-dock" role="region" aria-label="实时舰队遥测">
+          <button
+            type="button"
+            class="dock-metric"
+            (click)="activeTab.set('nodes')"
+            title="查看多机舰队拓扑"
+          >
+            <span
+              class="pulse-dot tiny"
+              [class.green]="onlineNodeCount() > 0"
+              [class.live-ring]="onlineNodeCount() > 0"
+              [class.red]="onlineNodeCount() === 0"
+            ></span>
+            <span class="metric-label">节点</span>
+            <strong class="metric-val tabular-nums">{{ onlineNodeCount() }}/{{ backend.nodes().length }}</strong>
           </button>
-        }
+
+          <span class="dock-sep" aria-hidden="true"></span>
+
+          <button
+            type="button"
+            class="dock-metric"
+            (click)="activeTab.set('missions')"
+            title="当前运行中的 Agent 并发数"
+          >
+            <fleet-icon name="bolt" [size]="12" class="text-primary" />
+            <span class="metric-label">并发</span>
+            <strong class="metric-val tabular-nums">{{ runningTaskCount() }}/{{ totalNodeCapacity() }}</strong>
+          </button>
+
+          <span class="dock-sep" aria-hidden="true"></span>
+
+          <button
+            type="button"
+            class="dock-metric"
+            (click)="activeTab.set('routing')"
+            title="查看账号与模型槽位健康率"
+          >
+            <fleet-icon name="shield" [size]="12" />
+            <span class="metric-label">健康</span>
+            <strong class="metric-val tabular-nums">{{ healthySlotRate() }}%</strong>
+          </button>
+
+          @if (backend.analytics().totalRuns > 0) {
+            <span class="dock-sep" aria-hidden="true"></span>
+            <button
+              type="button"
+              class="dock-metric savings"
+              (click)="openAnalyticsTab()"
+              title="查看难度路由估算节省"
+            >
+              <fleet-icon name="chart" [size]="12" />
+              <span class="metric-label">省费</span>
+              <strong class="metric-val tabular-nums">{{ backend.analytics().estimatedSavingsPercent }}%</strong>
+            </button>
+          }
+        </div>
+
         @if (backend.attention().length > 0) {
-          <button type="button" class="telemetry-pill alert-pill" (click)="activeTab.set('inbox')">
+          <button
+            type="button"
+            class="attention-chip"
+            (click)="activeTab.set('inbox')"
+          >
             <fleet-icon name="alert" [size]="13" />
             <span>{{ backend.attention().length }} 项待处理</span>
           </button>
         }
-      </div>
 
-      <div class="telemetry-actions">
-        <button type="button" class="btn btn-xs btn-ghost gap-1" (click)="backend.refresh()">
-          <fleet-icon name="refresh" [size]="13" />
-          <span>同步</span>
-        </button>
-        <button type="button" class="btn btn-xs btn-primary gap-1" (click)="openNewNodeModal()">
-          <fleet-icon name="plus" [size]="13" />
-          <span>连接 Termexo</span>
-        </button>
+        <div class="telemetry-actions">
+          <button
+            type="button"
+            class="btn btn-xs btn-ghost header-sync-btn"
+            [disabled]="backend.busy()"
+            (click)="triggerRefresh()"
+            title="立即同步全部 Termexo 节点状态"
+          >
+            <fleet-icon name="refresh" [size]="13" [class.spin]="backend.busy()" />
+            <span>同步</span>
+          </button>
+          <button type="button" class="btn btn-xs btn-primary" (click)="openNewNodeModal()">
+            <fleet-icon name="plus" [size]="13" />
+            <span>连接 Termexo</span>
+          </button>
+        </div>
+
+        @if (backend.desktop) {
+          <div class="window-controls" role="group" aria-label="窗口控制">
+            <button
+              type="button"
+              class="win-ctrl-btn"
+              title="最小化"
+              aria-label="最小化窗口"
+              (click)="minimizeWindow()"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6h8" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="win-ctrl-btn"
+              [title]="windowMaximized() ? '向下还原' : '最大化'"
+              [attr.aria-label]="windowMaximized() ? '还原窗口' : '最大化窗口'"
+              (click)="toggleMaximizeWindow()"
+            >
+              @if (windowMaximized()) {
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <rect x="2" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.25" />
+                  <path d="M4 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H8" stroke="currentColor" stroke-width="1.25" />
+                </svg>
+              } @else {
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <rect x="2" y="2" width="8" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3" />
+                </svg>
+              }
+            </button>
+            <button
+              type="button"
+              class="win-ctrl-btn win-close"
+              title="关闭"
+              aria-label="关闭窗口"
+              (click)="closeWindow()"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+        }
       </div>
     </header>
 
+    <!-- Scrollable Main Canvas -->
     <main class="fleet-main">
-      @if (backend.error()) {
-        <div class="banner banner-error">
-          <fleet-icon name="alert" [size]="15" />
-          <span>{{ backend.error() }}</span>
-        </div>
-      }
-
-      @if (needsOnboarding()) {
-        <section class="onboarding-strip">
-          <div class="onboarding-steps">
-            <div class="step-chip">
-              <span class="step-num">1</span>
-              <span>在 Termexo 开启「AI 操控 (MCP)」并复制 Token</span>
-            </div>
-            <fleet-icon name="arrow-right" [size]="14" />
-            <div class="step-chip">
-              <span class="step-num">2</span>
-              <span>连接到本中枢，自动同步工作区与账号池</span>
-            </div>
-            <fleet-icon name="arrow-right" [size]="14" />
-            <div class="step-chip">
-              <span class="step-num">3</span>
-              <span>输入一句话需求，自动按难度派发并开子 Agent</span>
-            </div>
+      <div class="main-container">
+        @if (backend.error()) {
+          <div class="banner banner-error" role="alert">
+            <fleet-icon name="alert" [size]="15" />
+            <span class="flex-1">{{ backend.error() }}</span>
+            <button type="button" class="banner-dismiss" (click)="backend.error.set(null)" aria-label="关闭错误提示">
+              <fleet-icon name="close" [size]="13" />
+            </button>
           </div>
-          <button type="button" class="btn btn-sm btn-primary shrink-0" (click)="openNewNodeModal()">
-            立即连接本机 Termexo
-          </button>
-        </section>
-      }
+        }
 
-      @switch (activeTab()) {
-        @case ('missions') {
-          <section class="composer-deck">
-            <div class="composer-head">
-              <div>
-                <h1>下发新任务到 Termexo 舰队</h1>
-                <p>选择协作形态与难度，系统自动匹配最合适的 Termexo 节点、账号与模型在真实终端中执行。</p>
-              </div>
-              <div class="composer-target">
-                <select
-                  class="select select-bordered select-xs"
-                  [ngModel]="resolvedNodeId()"
-                  (ngModelChange)="selectedNodeId.set($event)"
-                  title="默认 Termexo 节点"
-                >
-                  @for (node of backend.nodes(); track node.id) {
-                    <option [value]="node.id">{{ node.name }}</option>
-                  }
-                </select>
-                <select
-                  class="select select-bordered select-xs"
-                  [ngModel]="resolvedWorkspaceId()"
-                  (ngModelChange)="selectedWorkspaceId.set($event)"
-                  title="目标工作区"
-                >
-                  @for (ws of activeNodeSnapshot()?.workspaces ?? []; track ws.id) {
-                    <option [value]="ws.id">{{ ws.name }}</option>
-                  }
-                </select>
+        @if (needsOnboarding()) {
+          <section class="onboarding-strip">
+            <div class="onboarding-left">
+              <div class="onboarding-badge">快速上手</div>
+              <div class="onboarding-steps">
+                <span class="step-chip"><span class="step-num">1</span>Termexo 开启「AI 操控 (MCP)」复制 Token</span>
+                <fleet-icon name="chevron-right" [size]="13" class="opacity-40" />
+                <span class="step-chip"><span class="step-num">2</span>接入本中枢，自动同步工作区与账号池</span>
+                <fleet-icon name="chevron-right" [size]="13" class="opacity-40" />
+                <span class="step-chip"><span class="step-num">3</span>一句话下发，按 L1–L4 难度自动路由执行</span>
               </div>
             </div>
-
-            <div class="workflow-cards">
-              @for (wf of workflowOptions; track wf.id) {
-                <button
-                  type="button"
-                  class="workflow-card"
-                  [class.selected]="selectedWorkflow() === wf.id"
-                  (click)="selectedWorkflow.set(wf.id)"
-                >
-                  <div class="wf-top">
-                    <span class="wf-icon-box"><fleet-icon [name]="wf.icon" [size]="15" /></span>
-                    <span class="wf-title">{{ wf.title }}</span>
-                    <span class="wf-badge">{{ wf.badge }}</span>
-                  </div>
-                  <div class="wf-flow">
-                    @for (step of wf.flow; track step; let last = $last) {
-                      <span class="wf-node">{{ step }}</span>
-                      @if (!last) {
-                        <span class="wf-arrow">→</span>
-                      }
-                    }
-                  </div>
-                  <div class="wf-desc">{{ wf.desc }}</div>
-                </button>
-              }
-            </div>
-
-            <div class="preset-strip">
-              <span class="preset-label">
-                <fleet-icon name="sparkles" [size]="12" />
-                快捷模板
-              </span>
-              @for (preset of missionPresets; track preset.label) {
-                <button type="button" class="preset-chip" (click)="applyMissionPreset(preset)">
-                  {{ preset.label }}
-                </button>
-              }
-            </div>
-
-            <div class="composer-inputs">
-              <input
-                type="text"
-                class="input input-bordered input-sm composer-title-input"
-                placeholder="任务标题（可选，留空将自动从需求首句提取）"
-                [ngModel]="missionTitle()"
-                (ngModelChange)="missionTitle.set($event)"
-              />
-              <textarea
-                class="textarea textarea-bordered textarea-sm composer-goal-input"
-                placeholder="用自然语言描述目标、改动范围与验收标准……（按 Ctrl+Enter 立即智能路由并执行）"
-                [ngModel]="missionGoal()"
-                (ngModelChange)="missionGoal.set($event)"
-                (keydown)="handleGoalKeydown($event)"
-              ></textarea>
-            </div>
-
-            @let preview = composerRoutePreview();
-            <div class="route-forecast-strip">
-              <span class="forecast-tag">
-                <fleet-icon name="route" [size]="12" />
-                实时路由预判
-              </span>
-              <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(preview.tier)">
-                {{ preview.tier }}
-              </span>
-              <span class="forecast-reason">{{ preview.reason }}</span>
-              <span class="forecast-arrow">→</span>
-              @if (preview.winner; as win) {
-                <span class="forecast-winner">
-                  <strong>{{ win.label }}</strong>
-                  <span class="opacity-65">({{ win.nodeId }} · {{ win.modelName || win.agentType }})</span>
-                </span>
-              } @else {
-                <span class="text-warning text-[11px]">请先在拓扑页连接 Termexo 或恢复健康槽位</span>
-              }
-            </div>
-
-            <div class="composer-toolbar">
-              <div class="tier-selector">
-                @for (opt of difficultyOptions; track opt.id) {
-                  <button
-                    type="button"
-                    class="tier-pill"
-                    [class]="'tier-pill tone-' + opt.tone"
-                    [class.active]="selectedDifficulty() === opt.id"
-                    [title]="opt.hint"
-                    (click)="selectedDifficulty.set(opt.id)"
-                  >
-                    <span class="tier-dot"></span>
-                    <span>{{ opt.label }}</span>
-                  </button>
-                }
-              </div>
-
-              <div class="composer-actions">
-                <button
-                  type="button"
-                  class="btn btn-xs btn-ghost gap-1"
-                  (click)="advancedComposerOpen.set(!advancedComposerOpen())"
-                >
-                  <fleet-icon name="sliders" [size]="13" />
-                  <span>{{ advancedComposerOpen() ? '收起高级设置' : '高级护栏与轨道' }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-primary gap-1.5"
-                  [disabled]="backend.busy()"
-                  (click)="launchMission()"
-                >
-                  <fleet-icon name="play" [size]="12" />
-                  <span>智能路由并执行</span>
-                  <kbd class="kbd-chip dark">Ctrl ↵</kbd>
-                </button>
-              </div>
-            </div>
-
-            @if (advancedComposerOpen()) {
-              <div class="advanced-drawer">
-                <label class="adv-field">
-                  <span>路由偏好</span>
-                  <select
-                    class="select select-bordered select-xs"
-                    [ngModel]="selectedRoutingMode()"
-                    (ngModelChange)="selectedRoutingMode.set($event)"
-                  >
-                    <option value="balanced">Balanced 均衡</option>
-                    <option value="cost">Cost 省钱优先</option>
-                    <option value="quality">Quality 质量优先</option>
-                  </select>
-                </label>
-                <label class="adv-field">
-                  <span>执行轨道</span>
-                  <select
-                    class="select select-bordered select-xs"
-                    [ngModel]="selectedExecutionMode()"
-                    (ngModelChange)="selectedExecutionMode.set($event)"
-                  >
-                    <option value="task">Task 任务看板</option>
-                    <option value="terminal">Terminal 已有终端</option>
-                  </select>
-                </label>
-                <label class="adv-field">
-                  <span>指定 Agent</span>
-                  <select
-                    class="select select-bordered select-xs"
-                    [ngModel]="selectedAgent()"
-                    (ngModelChange)="selectedAgent.set($event)"
-                  >
-                    <option value="">自动路由</option>
-                    <option value="claude">Claude Code</option>
-                    <option value="codex">Codex CLI</option>
-                    <option value="opencode">OpenCode</option>
-                    <option value="pi">Pi Agent</option>
-                    <option value="grok">Grok Build</option>
-                    <option value="antigravity">Antigravity</option>
-                  </select>
-                </label>
-                <label class="adv-field">
-                  <span>节点亲和标签</span>
-                  <input
-                    type="text"
-                    class="input input-bordered input-xs"
-                    placeholder="如 macos, gpu"
-                    [ngModel]="requiredTagsInput()"
-                    (ngModelChange)="requiredTagsInput.set($event)"
-                  />
-                </label>
-                <label class="adv-field">
-                  <span>反向 MCP Profile</span>
-                  <select
-                    class="select select-bordered select-xs"
-                    [ngModel]="selectedMcpProfileId()"
-                    (ngModelChange)="selectedMcpProfileId.set($event)"
-                  >
-                    <option value="">自动匹配</option>
-                    @for (mcp of availableMcpProfiles(); track mcp.id) {
-                      <option [value]="mcp.id">{{ mcp.name }}</option>
-                    }
-                  </select>
-                </label>
-                <label class="adv-field">
-                  <span>最大深度 / 并发</span>
-                  <div class="flex gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      max="4"
-                      class="input input-bordered input-xs w-1/2"
-                      [ngModel]="maxDepth()"
-                      (ngModelChange)="maxDepth.set($event)"
-                    />
-                    <input
-                      type="number"
-                      min="1"
-                      max="16"
-                      class="input input-bordered input-xs w-1/2"
-                      [ngModel]="maxConcurrency()"
-                      (ngModelChange)="maxConcurrency.set($event)"
-                    />
-                  </div>
-                </label>
-                <label class="adv-checkbox">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-xs checkbox-primary"
-                    [ngModel]="isolateWorktree()"
-                    (ngModelChange)="isolateWorktree.set($event)"
-                  />
-                  <span>并行子 Agent 自动隔离 Git Worktree</span>
-                </label>
-              </div>
-            }
+            <button type="button" class="btn btn-sm btn-primary shrink-0" (click)="openNewNodeModal()">
+              <fleet-icon name="plus" [size]="14" />
+              <span>立即连接本机 Termexo</span>
+            </button>
           </section>
+        }
 
-          <div class="section-heading">
-            <div class="flex items-center gap-3 flex-wrap">
-              <span>运行中的任务流水线（DAG）</span>
-              <div class="filter-pills">
-                <button
-                  type="button"
-                  class="filter-pill"
-                  [class.active]="missionFilter() === 'all'"
-                  (click)="missionFilter.set('all')"
-                >
-                  全部 ({{ missionsWithDag().length }})
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  [class.active]="missionFilter() === 'active'"
-                  (click)="missionFilter.set('active')"
-                >
-                  进行中
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  [class.active]="missionFilter() === 'completed'"
-                  (click)="missionFilter.set('completed')"
-                >
-                  已完成
-                </button>
-                <button
-                  type="button"
-                  class="filter-pill"
-                  [class.active]="missionFilter() === 'failed'"
-                  (click)="missionFilter.set('failed')"
-                >
-                  失败
-                </button>
-              </div>
-            </div>
-            <span class="section-meta">显示 {{ filteredMissionsWithDag().length }} / {{ missionsWithDag().length }} 个 Mission</span>
-          </div>
-
-          <div class="mission-list">
-            @for (group of filteredMissionsWithDag(); track group.mission.id) {
-              <section class="mission-card">
-                <div class="mission-card-top">
-                  <div class="min-w-0">
-                    <div class="mission-title-row">
-                      <span class="mission-title">{{ group.mission.title }}</span>
-                      <span class="status-chip" [class]="'status-chip st-' + group.mission.status">
-                        {{ statusLabel(group.mission.status) }}
-                      </span>
+        @switch (activeTab()) {
+          <!-- ==================== 1. MISSION DECK ==================== -->
+          @case ('missions') {
+            <section class="composer-shell" [class.is-collapsed]="composerCollapsed()">
+              @if (composerCollapsed()) {
+                <div class="composer-collapsed-bar" (click)="toggleComposerCollapsed()">
+                  <div class="collapsed-bar-left">
+                    <span class="collapsed-plus"><fleet-icon name="sparkles" [size]="14" /></span>
+                    <span class="collapsed-prompt">输入自然语言需求，智能路由到 Termexo 舰队执行...</span>
+                  </div>
+                  <div class="collapsed-bar-right">
+                    <span class="mini-chip">{{ activeWorkflowOption().shortTitle }}</span>
+                    <span class="btn btn-xs btn-primary">展开下发面板</span>
+                  </div>
+                </div>
+              } @else {
+                <!-- Top Control Strip: Workflow Segmented Tabs + Target Context -->
+                <div class="composer-top-strip">
+                  <div class="workflow-segment-wrap">
+                    <div class="workflow-segment" role="tablist" aria-label="编排形态">
+                      @for (wf of workflowOptions; track wf.id) {
+                        <button
+                          type="button"
+                          role="tab"
+                          class="wf-seg-btn"
+                          [class.active]="selectedWorkflow() === wf.id"
+                          [attr.aria-selected]="selectedWorkflow() === wf.id"
+                          [title]="wf.desc"
+                          (click)="selectWorkflow(wf.id)"
+                        >
+                          <fleet-icon [name]="wf.icon" [size]="13" />
+                          <span>{{ wf.shortTitle }}</span>
+                          @if (wf.id === 'implement_verify_review') {
+                            <span class="seg-tag">推荐</span>
+                          }
+                        </button>
+                      }
                     </div>
-                    <div class="mission-sub">
-                      <span>{{ group.completedCount }}/{{ group.tasks.length }} 节点完成</span>
-                      <span>·</span>
-                      <span>策略 {{ group.mission.routingMode }}</span>
-                      <span>·</span>
-                      <span>护栏 深度≤{{ group.mission.guardrails.maxDepth }} / 并发≤{{ group.mission.guardrails.maxConcurrency }}</span>
+
+                    <div class="active-wf-flow" [title]="activeWorkflowOption().desc">
+                      @for (step of activeWorkflowOption().flow; track step; let last = $last) {
+                        <span class="flow-pill">{{ step }}</span>
+                        @if (!last) {
+                          <fleet-icon name="chevron-right" [size]="11" class="flow-sep" />
+                        }
+                      }
                     </div>
                   </div>
-                  <div class="mission-top-right">
-                    <div class="progress-wrap">
-                      <div class="progress-track">
-                        <div class="progress-fill" [style.width.%]="group.progress"></div>
-                      </div>
-                      <span class="progress-num">{{ group.progress }}%</span>
+
+                  <div class="composer-target-bar">
+                    <div class="target-selector-group">
+                      <span class="target-icon" title="默认执行节点">
+                        <fleet-icon name="server" [size]="12" />
+                      </span>
+                      <select
+                        class="target-select"
+                        [ngModel]="resolvedNodeId()"
+                        (ngModelChange)="selectMissionNode($event)"
+                        title="默认 Termexo 节点"
+                      >
+                        @for (node of backend.nodes(); track node.id) {
+                          <option [value]="node.id">{{ node.name }}</option>
+                        }
+                      </select>
+                      <span class="target-slash">/</span>
+                      <span class="target-icon" title="目标工作区">
+                        <fleet-icon name="folder" [size]="12" />
+                      </span>
+                      <select
+                        class="target-select"
+                        [ngModel]="resolvedWorkspaceId()"
+                        (ngModelChange)="selectedWorkspaceId.set($event)"
+                        [title]="selectedWorkspaceMeta()?.projectPath || '目标工作区'"
+                      >
+                        @for (ws of activeNodeSnapshot()?.workspaces ?? []; track ws.id) {
+                          <option [value]="ws.id">{{ ws.name }}</option>
+                        }
+                      </select>
                     </div>
+
                     <button
                       type="button"
-                      class="btn btn-xs btn-ghost"
-                      (click)="backend.advanceMissionDag(group.mission.id)"
+                      class="icon-ghost-btn"
+                      title="收起下发区，专注查看流水线"
+                      (click)="toggleComposerCollapsed()"
                     >
-                      推进就绪节点
+                      <fleet-icon name="chevron-up" [size]="14" />
                     </button>
                   </div>
                 </div>
 
-                <div class="dag-pipeline">
-                  @for (col of group.stages; track col.stage; let lastStage = $last) {
-                    <div class="dag-stage-col">
-                      <div class="stage-header">
-                        <span class="stage-index">STAGE {{ col.stage + 1 }}</span>
-                        <span class="stage-count">{{ col.tasks.length }}</span>
+                <!-- Unified Spotlight Prompt Box -->
+                <div class="prompt-canvas">
+                  <div class="prompt-title-row">
+                    <input
+                      type="text"
+                      class="prompt-title-input"
+                      placeholder="任务标题（可选，留空自动从首句提取）"
+                      [ngModel]="missionTitle()"
+                      (ngModelChange)="missionTitle.set($event)"
+                    />
+                    @if (missionTitle() || missionGoal()) {
+                      <button
+                        type="button"
+                        class="prompt-clear-btn"
+                        title="清空输入"
+                        (click)="clearComposer()"
+                      >
+                        <fleet-icon name="close" [size]="12" />
+                        <span>清空</span>
+                      </button>
+                    }
+                  </div>
+
+                  <textarea
+                    class="prompt-goal-input"
+                    rows="2"
+                    placeholder="用自然语言描述目标、改动范围与验收标准…… 按 Ctrl+Enter 立即智能路由并执行"
+                    [ngModel]="missionGoal()"
+                    (ngModelChange)="missionGoal.set($event)"
+                    (keydown)="handleGoalKeydown($event)"
+                  ></textarea>
+
+                  <div class="prompt-presets-row">
+                    <span class="preset-label">
+                      <fleet-icon name="sparkles" [size]="12" />
+                      <span>快捷模板</span>
+                    </span>
+                    <div class="preset-chips">
+                      @for (preset of missionPresets; track preset.label) {
+                        <button
+                          type="button"
+                          class="preset-chip"
+                          [class.active]="missionTitle() === preset.title && missionGoal() === preset.goal"
+                          (click)="applyMissionPreset(preset)"
+                        >
+                          <span class="preset-tag">{{ preset.tierTag }}</span>
+                          <span>{{ preset.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Integrated Action Dock -->
+                <div class="composer-toolbar">
+                  <div class="toolbar-left">
+                    <div class="tier-selector" role="group" aria-label="任务难度档位">
+                      @for (opt of difficultyOptions; track opt.id) {
+                        <button
+                          type="button"
+                          class="tier-pill"
+                          [class]="'tier-pill tone-' + opt.tone"
+                          [class.active]="selectedDifficulty() === opt.id"
+                          [title]="opt.hint + ' (' + opt.costHint + ')'"
+                          (click)="selectedDifficulty.set(opt.id)"
+                        >
+                          <span class="tier-dot"></span>
+                          <span>{{ opt.label }}</span>
+                        </button>
+                      }
+                    </div>
+
+                    <div class="mode-mini-switch" role="group" aria-label="路由成本偏好">
+                      <button
+                        type="button"
+                        class="mini-mode-btn"
+                        [class.active]="selectedRoutingMode() === 'cost'"
+                        (click)="selectedRoutingMode.set('cost')"
+                        title="优先省钱的低成本槽位"
+                      >
+                        省钱
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-mode-btn"
+                        [class.active]="selectedRoutingMode() === 'balanced'"
+                        (click)="selectedRoutingMode.set('balanced')"
+                        title="质量与成本均衡分配"
+                      >
+                        均衡
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-mode-btn"
+                        [class.active]="selectedRoutingMode() === 'quality'"
+                        (click)="selectedRoutingMode.set('quality')"
+                        title="优先最强推理能力槽位"
+                      >
+                        质量
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="composer-actions">
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost adv-toggle-btn"
+                      [class.is-open]="advancedComposerOpen()"
+                      (click)="advancedComposerOpen.set(!advancedComposerOpen())"
+                    >
+                      <fleet-icon name="sliders" [size]="13" />
+                      <span>护栏与轨道</span>
+                      <span class="adv-summary-tag">
+                        D≤{{ maxDepth() }} · C≤{{ maxConcurrency() }}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-primary launch-btn"
+                      [disabled]="backend.busy()"
+                      (click)="launchMission()"
+                    >
+                      <fleet-icon name="play" [size]="11" />
+                      <span>智能路由并执行</span>
+                      <kbd class="kbd-chip dark">Ctrl ↵</kbd>
+                    </button>
+                  </div>
+                </div>
+
+                @if (advancedComposerOpen()) {
+                  <div class="advanced-drawer">
+                    <label class="adv-field">
+                      <span>执行轨道</span>
+                      <select
+                        class="select select-xs"
+                        [ngModel]="selectedExecutionMode()"
+                        (ngModelChange)="selectedExecutionMode.set($event)"
+                      >
+                        <option value="task">Task 任务看板（推荐）</option>
+                        <option value="terminal" [disabled]="selectedWorkflow() === 'planner_dag'">
+                          Terminal 已有终端
+                        </option>
+                      </select>
+                    </label>
+                    <label class="adv-field">
+                      <span>指定 Agent</span>
+                      <select
+                        class="select select-xs"
+                        [ngModel]="selectedAgent()"
+                        (ngModelChange)="selectedAgent.set($event)"
+                      >
+                        <option value="">自动路由</option>
+                        <option value="claude">Claude Code</option>
+                        <option value="codex">Codex CLI</option>
+                        <option value="opencode">OpenCode</option>
+                        <option value="pi">Pi Agent</option>
+                        <option value="grok">Grok Build</option>
+                        <option value="antigravity">Antigravity</option>
+                      </select>
+                    </label>
+                    <label class="adv-field">
+                      <span>节点亲和标签</span>
+                      <input
+                        type="text"
+                        class="input input-xs"
+                        placeholder="如 macos, gpu"
+                        [ngModel]="requiredTagsInput()"
+                        (ngModelChange)="requiredTagsInput.set($event)"
+                      />
+                    </label>
+                    <label class="adv-field">
+                      <span>反向 MCP Profile</span>
+                      <select
+                        class="select select-xs"
+                        [ngModel]="selectedMcpProfileId()"
+                        (ngModelChange)="selectedMcpProfileId.set($event)"
+                      >
+                        <option value="">自动匹配 Termexo Fleet</option>
+                        @for (mcp of availableMcpProfiles(); track mcp.id) {
+                          <option [value]="mcp.id">{{ mcp.name }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label class="adv-field">
+                      <span>最大深度 / 并发 / 总派生</span>
+                      <div class="adv-triple">
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          class="input input-xs"
+                          title="最大递归深度"
+                          [ngModel]="maxDepth()"
+                          (ngModelChange)="maxDepth.set($event)"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          max="16"
+                          class="input input-xs"
+                          title="最大并发子 Agent"
+                          [ngModel]="maxConcurrency()"
+                          (ngModelChange)="maxConcurrency.set($event)"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          max="48"
+                          class="input input-xs"
+                          title="总派生预算上限"
+                          [ngModel]="maxSubagents()"
+                          (ngModelChange)="maxSubagents.set($event)"
+                        />
+                      </div>
+                    </label>
+                    <div class="adv-switch-cell">
+                      <label class="ui-switch">
+                        <input
+                          type="checkbox"
+                          [ngModel]="isolateWorktree()"
+                          (ngModelChange)="isolateWorktree.set($event)"
+                        />
+                        <span class="switch-track"></span>
+                        <span class="switch-label">并行子 Agent 自动隔离 Git Worktree</span>
+                      </label>
+                    </div>
+                  </div>
+                }
+
+                <!-- Live Route Forecast Ribbon -->
+                @let preview = composerRoutePreview();
+                <div class="route-forecast-ribbon" [class.no-winner]="!preview.winner">
+                  <div class="forecast-left">
+                    <span class="forecast-badge">
+                      <fleet-icon name="route" [size]="12" />
+                      <span>路由预判</span>
+                    </span>
+                    <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(preview.tier)">
+                      {{ preview.tier }} · {{ preview.costUnits }}
+                    </span>
+                    <span class="forecast-reason">{{ preview.reason }}</span>
+                  </div>
+
+                  <div class="forecast-right">
+                    <fleet-icon name="arrow-right" [size]="12" class="forecast-arrow-icon" />
+                    @if (preview.winner; as win) {
+                      @let winBadge = agentBadge(win.agentType);
+                      <span class="forecast-winner">
+                        <span class="mini-emblem" [class]="'mini-emblem ag-' + winBadge.tone">{{ winBadge.short }}</span>
+                        <strong>{{ win.label }}</strong>
+                        <span class="forecast-winner-meta">{{ win.nodeId }} · {{ win.modelName || winBadge.name }}</span>
+                      </span>
+                    } @else {
+                      <span class="forecast-empty">
+                        暂无可用健康槽位
+                        <button type="button" class="inline-action-link" (click)="activeTab.set('nodes')">
+                          检查节点
+                        </button>
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+            </section>
+
+            <!-- Live DAG Pipeline Header & Filter Bar -->
+            <div class="section-heading">
+              <div class="section-heading-left">
+                <h2>任务流水线（DAG）</h2>
+                <div class="filter-pills" role="tablist" aria-label="按任务状态筛选">
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="missionFilter() === 'all'"
+                    (click)="missionFilter.set('all')"
+                  >
+                    全部 <span class="pill-cnt tabular-nums">{{ missionStatusCounts().all }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="missionFilter() === 'active'"
+                    (click)="missionFilter.set('active')"
+                  >
+                    进行中
+                    @if (missionStatusCounts().active > 0) {
+                      <span class="pill-cnt live tabular-nums">{{ missionStatusCounts().active }}</span>
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="missionFilter() === 'completed'"
+                    (click)="missionFilter.set('completed')"
+                  >
+                    已完成
+                    @if (missionStatusCounts().completed > 0) {
+                      <span class="pill-cnt tabular-nums">{{ missionStatusCounts().completed }}</span>
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="missionFilter() === 'failed'"
+                    (click)="missionFilter.set('failed')"
+                  >
+                    失败
+                    @if (missionStatusCounts().failed > 0) {
+                      <span class="pill-cnt danger tabular-nums">{{ missionStatusCounts().failed }}</span>
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="missionFilter() === 'cancelled'"
+                    (click)="missionFilter.set('cancelled')"
+                  >
+                    已取消
+                    @if (missionStatusCounts().cancelled > 0) {
+                      <span class="pill-cnt tabular-nums">{{ missionStatusCounts().cancelled }}</span>
+                    }
+                  </button>
+                </div>
+              </div>
+              <span class="section-meta tabular-nums">
+                显示 {{ filteredMissionsWithDag().length }} / {{ missionsWithDag().length }} 个 Mission
+              </span>
+            </div>
+
+            <!-- Mission DAG List -->
+            @if (filteredMissionsWithDag().length === 0) {
+              <div class="empty-zen compact">
+                <div class="zen-ring subtle">
+                  <fleet-icon name="workflow" [size]="22" />
+                </div>
+                <h3>当前筛选条件下暂无 Mission</h3>
+                <p>你可以在上方指挥甲板输入一句需求立刻启动流水线，或切换查看全部任务。</p>
+                @if (missionFilter() !== 'all') {
+                  <button type="button" class="btn btn-xs btn-outline mt-3" (click)="missionFilter.set('all')">
+                    显示全部 Mission
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="mission-list">
+                @for (group of filteredMissionsWithDag(); track group.mission.id) {
+                  @let folded = isMissionCollapsed(group.mission.id);
+                  <section class="mission-card" [class.is-folded]="folded">
+                    <div class="mission-card-top">
+                      <div class="mission-head-left">
+                        <button
+                          type="button"
+                          class="fold-btn"
+                          (click)="toggleMissionCollapsed(group.mission.id)"
+                          [title]="folded ? '展开 DAG 流水线' : '折叠 DAG 流水线'"
+                        >
+                          <fleet-icon [name]="folded ? 'chevron-right' : 'chevron-down'" [size]="14" />
+                        </button>
+
+                        <div class="min-w-0">
+                          <div class="mission-title-row">
+                            <span class="mission-title">{{ group.mission.title }}</span>
+                            <span class="status-chip" [class]="'status-chip st-' + group.mission.status">
+                              @if (group.mission.status === 'running') {
+                                <span class="pulse-dot green tiny"></span>
+                              }
+                              {{ statusLabel(group.mission.status) }}
+                            </span>
+                            @if (group.waitingCount > 0) {
+                              <span class="status-chip st-waiting_approval">
+                                {{ group.waitingCount }} 个待响应
+                              </span>
+                            }
+                          </div>
+                          <div class="mission-sub">
+                            <span class="tabular-nums">{{ group.completedCount }}/{{ group.tasks.length }} 节点完成</span>
+                            <span class="sub-dot">·</span>
+                            <span>{{ routingModeLabel(group.mission.routingMode) }}</span>
+                            <span class="sub-dot">·</span>
+                            <span>护栏 D≤{{ group.mission.guardrails.maxDepth }} / C≤{{ group.mission.guardrails.maxConcurrency }}</span>
+                            @if (group.mission.guardrails.isolateWorktreeByDefault) {
+                              <span class="sub-dot">·</span>
+                              <span class="sub-highlight">Worktree 隔离</span>
+                            }
+                          </div>
+                        </div>
                       </div>
 
-                      <div class="stage-cards">
-                        @for (task of col.tasks; track task.id) {
-                          @let badge = agentBadge(task.assignedAgentType);
-                          <article
-                            class="dag-node-card"
+                      <div class="mission-top-right">
+                        <div class="progress-wrap" title="Mission 完成进度">
+                          <div class="progress-track">
+                            <div class="progress-fill" [style.width.%]="group.progress"></div>
+                          </div>
+                          <span class="progress-num tabular-nums">{{ group.progress }}%</span>
+                        </div>
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          (click)="backend.advanceMissionDag(group.mission.id)"
+                          [disabled]="backend.busy()"
+                          title="扫描依赖已满足的待执行节点并立即派发"
+                        >
+                          <fleet-icon name="bolt" [size]="12" />
+                          <span>推进就绪节点</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    @if (!folded) {
+                      <div class="dag-pipeline">
+                        @for (col of group.stages; track col.stage; let lastStage = $last) {
+                          <div class="dag-stage-col">
+                            <div class="stage-header">
+                              <span class="stage-index">STAGE 0{{ col.stage + 1 }}</span>
+                              <span class="stage-count tabular-nums">{{ col.tasks.length }} 节点</span>
+                            </div>
+
+                            <div class="stage-cards">
+                              @for (task of col.tasks; track task.id) {
+                                @let badge = agentBadge(task.assignedAgentType);
+                                <article
+                                  class="dag-node-card"
+                                  [class.is-running]="task.status === 'running'"
+                                  [class.is-done]="task.status === 'completed'"
+                                  [class.is-failed]="task.status === 'failed'"
+                                  [class.is-waiting]="task.status === 'waiting_input' || task.status === 'waiting_approval'"
+                                >
+                                  <div class="node-card-top">
+                                    <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">
+                                      {{ badge.short }}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                      <div class="node-card-title">{{ task.title }}</div>
+                                      <div class="node-card-model">
+                                        {{ badge.name }}
+                                        @if (task.assignedModelName) {
+                                          <span>· {{ task.assignedModelName }}</span>
+                                        }
+                                      </div>
+                                    </div>
+                                    <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(task.difficulty)">
+                                      {{ task.difficulty }}
+                                    </span>
+                                  </div>
+
+                                  <div class="node-meta-chips">
+                                    <span class="mini-chip" [class]="'mini-chip st-' + task.status">
+                                      @if (task.status === 'running') {
+                                        <span class="pulse-dot green tiny"></span>
+                                      }
+                                      {{ statusLabel(task.status) }}
+                                    </span>
+                                    @if (task.assignedNodeId) {
+                                      <span class="mini-chip">
+                                        <fleet-icon name="server" [size]="10" />
+                                        {{ task.assignedNodeId }}
+                                      </span>
+                                    }
+                                    @if (task.excludeModelFamily) {
+                                      <span class="mini-chip cross" title="强制排除上游模型家族以实现异构交叉审计">
+                                        <fleet-icon name="shield" [size]="10" />
+                                        异构 ≠ {{ task.excludeModelFamily }}
+                                      </span>
+                                    }
+                                    @if (task.worktreeBranch) {
+                                      <button
+                                        type="button"
+                                        class="mini-chip branch clickable"
+                                        title="点击复制 Worktree 分支名"
+                                        (click)="copyText('br-' + task.id, task.worktreeBranch, '已复制分支名 ' + task.worktreeBranch)"
+                                      >
+                                        <fleet-icon [name]="isCopied('br-' + task.id) ? 'check' : 'git-branch'" [size]="10" />
+                                        <span>{{ task.worktreeBranch }}</span>
+                                      </button>
+                                    }
+                                  </div>
+
+                                  @if (task.resultSummary) {
+                                    <p class="node-summary">{{ task.resultSummary }}</p>
+                                  }
+                                  @if (task.diffStat) {
+                                    <div class="node-diff">{{ task.diffStat }}</div>
+                                  }
+                                  @if (task.lastError) {
+                                    <div class="node-error">
+                                      <fleet-icon name="alert" [size]="11" />
+                                      <span>{{ task.lastError }}</span>
+                                    </div>
+                                  }
+
+                                  <div class="node-card-actions">
+                                    @if (task.status === 'pending') {
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-primary btn-outline"
+                                        [disabled]="backend.busy() || !dependenciesCompleted(task, group.tasks)"
+                                        [title]="dependenciesCompleted(task, group.tasks) ? '立即路由并派发到 Termexo' : '等待上游依赖节点完成'"
+                                        (click)="backend.dispatchTask(task.id)"
+                                      >
+                                        <fleet-icon name="play" [size]="10" />
+                                        <span>立即派发</span>
+                                      </button>
+                                    }
+                                    @if (task.status === 'failed' || task.status === 'cancelled') {
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-warning btn-outline"
+                                        [disabled]="backend.busy() || !dependenciesCompleted(task, group.tasks)"
+                                        (click)="backend.retryTaskWithEscalation(task.id)"
+                                      >
+                                        <fleet-icon name="refresh" [size]="11" />
+                                        <span>升档重试</span>
+                                      </button>
+                                    }
+                                    @if (task.status === 'waiting_input' || task.status === 'waiting_approval') {
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-success btn-outline"
+                                        (click)="nudgeWaitingTask(task)"
+                                      >
+                                        <fleet-icon name="bolt" [size]="11" />
+                                        <span>唤醒继续</span>
+                                      </button>
+                                    }
+                                    @if (
+                                      task.terminalStopRequested &&
+                                      (task.status === 'running' ||
+                                        task.status === 'waiting_input' ||
+                                        task.status === 'waiting_approval')
+                                    ) {
+                                      <span class="mini-chip st-waiting_approval">等待终端确认停止</span>
+                                    } @else if (
+                                      task.status === 'queued' ||
+                                      task.status === 'running' ||
+                                      task.status === 'waiting_input' ||
+                                      task.status === 'waiting_approval'
+                                    ) {
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-ghost text-error"
+                                        [disabled]="backend.busy()"
+                                        (click)="backend.cancelTask(task.id)"
+                                      >
+                                        <fleet-icon name="stop" [size]="10" />
+                                        <span>停止</span>
+                                      </button>
+                                    }
+                                    @if (task.assignedNodeId && task.termexoTerminalId) {
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-ghost terminal-action-btn"
+                                        (click)="inspectTerminal(task)"
+                                      >
+                                        <fleet-icon name="terminal" [size]="12" />
+                                        <span>实时终端</span>
+                                      </button>
+                                    }
+                                  </div>
+                                </article>
+                              }
+                            </div>
+                          </div>
+
+                          @if (!lastStage) {
+                            <div class="stage-connector" [class.flowing]="group.runningCount > 0" aria-hidden="true">
+                              <div class="connector-line"></div>
+                              <fleet-icon name="chevron-right" [size]="14" />
+                            </div>
+                          }
+                        }
+                      </div>
+                    }
+                  </section>
+                }
+              </div>
+            }
+          }
+
+          <!-- ==================== 2. SWARM TREE ==================== -->
+          @case ('tree') {
+            <header class="view-intro">
+              <p>{{ activeViewMeta().subtitle }}</p>
+            </header>
+
+            @if (taskTreeByMission().length === 0) {
+              <div class="empty-zen">
+                <div class="zen-ring subtle">
+                  <fleet-icon name="tree" [size]="26" />
+                </div>
+                <h3>尚无运行中的蜂群任务</h3>
+                <p>从任务指挥甲板发起一个任务，父 Agent 通过反向 MCP 派生的子 Agent 将实时呈现在此。</p>
+                <button type="button" class="btn btn-sm btn-primary mt-4" (click)="activeTab.set('missions')">
+                  前往任务指挥甲板
+                </button>
+              </div>
+            } @else {
+              <div class="mission-list">
+                @for (group of taskTreeByMission(); track group.mission.id) {
+                  <section class="mission-card">
+                    <div class="swarm-header">
+                      <div class="min-w-0">
+                        <div class="mission-title-row">
+                          <span class="mission-title">{{ group.mission.title }}</span>
+                          <span class="status-chip" [class]="'status-chip st-' + group.mission.status">
+                            {{ statusLabel(group.mission.status) }}
+                          </span>
+                        </div>
+                        <div class="mission-sub">
+                          <span class="sub-highlight">
+                            <fleet-icon name="git-branch" [size]="11" />
+                            Worktree 自动隔离：{{ group.mission.guardrails.isolateWorktreeByDefault ? '已开启' : '未开启' }}
+                          </span>
+                          <span class="sub-dot">·</span>
+                          <span>共 {{ group.tasks.length }} 个节点（含 {{ group.totalSubagents }} 个子 Agent）</span>
+                        </div>
+                      </div>
+
+                      <div class="guardrail-gauges">
+                        @let depthPct = percent(group.maxObservedDepth, group.mission.guardrails.maxDepth);
+                        <div class="gauge">
+                          <div class="gauge-top">
+                            <span>递归深度</span>
+                            <strong class="tabular-nums">{{ group.maxObservedDepth }} / {{ group.mission.guardrails.maxDepth }}</strong>
+                          </div>
+                          <div class="gauge-bar">
+                            <div class="gauge-fill" [class.danger]="depthPct >= 95" [style.width.%]="depthPct"></div>
+                          </div>
+                        </div>
+
+                        @let concPct = percent(group.activeSubagents, group.mission.guardrails.maxConcurrency);
+                        <div class="gauge">
+                          <div class="gauge-top">
+                            <span>活跃子 Agent</span>
+                            <strong class="tabular-nums">{{ group.activeSubagents }} / {{ group.mission.guardrails.maxConcurrency }}</strong>
+                          </div>
+                          <div class="gauge-bar">
+                            <div class="gauge-fill info" [class.warn]="concPct >= 75" [style.width.%]="concPct"></div>
+                          </div>
+                        </div>
+
+                        @let budgetPct = percent(group.totalSubagents, group.mission.guardrails.maxSubagents);
+                        <div class="gauge">
+                          <div class="gauge-top">
+                            <span>总派生预算</span>
+                            <strong class="tabular-nums">{{ group.totalSubagents }} / {{ group.mission.guardrails.maxSubagents }}</strong>
+                          </div>
+                          <div class="gauge-bar">
+                            <div class="gauge-fill warn" [class.danger]="budgetPct >= 90" [style.width.%]="budgetPct"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="swarm-tree">
+                      @for (task of group.tasks; track task.id) {
+                        @let badge = agentBadge(task.assignedAgentType);
+                        <div class="swarm-branch" [style.paddingLeft.px]="task.depth * 36">
+                          @if (task.depth > 0) {
+                            <div class="branch-elbow" [style.left.px]="(task.depth - 1) * 36 + 16"></div>
+                          }
+                          <div
+                            class="swarm-node-card"
                             [class.is-running]="task.status === 'running'"
                             [class.is-done]="task.status === 'completed'"
                             [class.is-failed]="task.status === 'failed'"
-                            [class.is-waiting]="task.status === 'waiting_input' || task.status === 'waiting_approval'"
+                            [class.is-sub]="task.depth > 0"
                           >
-                            <div class="node-card-top">
-                              <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">
-                                {{ badge.short }}
-                              </div>
-                              <div class="min-w-0 flex-1">
-                                <div class="node-card-title">{{ task.title }}</div>
-                                <div class="node-card-model">
-                                  {{ badge.name }}
-                                  @if (task.assignedModelName) {
-                                    · {{ task.assignedModelName }}
-                                  }
-                                </div>
-                              </div>
-                              <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(task.difficulty)">
-                                {{ task.difficulty }}
-                              </span>
+                            <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">
+                              {{ badge.short }}
                             </div>
 
-                            <div class="node-meta-chips">
-                              <span class="mini-chip" [class]="'mini-chip st-' + task.status">
-                                @if (task.status === 'running') {
-                                  <span class="pulse-dot green tiny"></span>
+                            <div class="min-w-0 flex-1">
+                              <div class="swarm-node-top-line">
+                                <span class="depth-tag" [class.is-root]="task.depth === 0">
+                                  {{ task.depth === 0 ? 'ROOT 主控' : 'SUB · D' + task.depth }}
+                                </span>
+                                <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(task.difficulty)">
+                                  {{ task.difficulty }}
+                                </span>
+                                <span class="swarm-node-title">{{ task.title }}</span>
+                              </div>
+
+                              <div class="swarm-node-meta">
+                                <span>{{ task.assignedNodeId || '待分配' }}</span>
+                                <span>·</span>
+                                <span>{{ badge.name }} / {{ task.assignedModelName || '默认模型' }}</span>
+                                @if (task.worktreeBranch) {
+                                  <span>·</span>
+                                  <button
+                                    type="button"
+                                    class="inline-branch-btn"
+                                    title="点击复制 Worktree 分支"
+                                    (click)="copyText('tree-br-' + task.id, task.worktreeBranch, '已复制分支名 ' + task.worktreeBranch)"
+                                  >
+                                    <fleet-icon [name]="isCopied('tree-br-' + task.id) ? 'check' : 'git-branch'" [size]="10" />
+                                    <span>{{ task.worktreeBranch }}</span>
+                                  </button>
                                 }
-                                {{ statusLabel(task.status) }}
-                              </span>
-                              @if (task.assignedNodeId) {
-                                <span class="mini-chip">
-                                  <fleet-icon name="server" [size]="11" />
-                                  {{ task.assignedNodeId }}
-                                </span>
-                              }
-                              @if (task.excludeModelFamily) {
-                                <span class="mini-chip cross">异构 ≠ {{ task.excludeModelFamily }}</span>
-                              }
-                              @if (task.worktreeBranch) {
-                                <span class="mini-chip branch">
-                                  <fleet-icon name="git-branch" [size]="11" />
-                                  {{ task.worktreeBranch }}
-                                </span>
+                              </div>
+
+                              @if (task.resultSummary) {
+                                <div class="swarm-node-summary">{{ task.resultSummary }}</div>
                               }
                             </div>
 
-                            @if (task.resultSummary) {
-                              <p class="node-summary">{{ task.resultSummary }}</p>
-                            }
-                            @if (task.diffStat) {
-                              <div class="node-diff">{{ task.diffStat }}</div>
-                            }
-                            @if (task.lastError) {
-                              <div class="node-error">{{ task.lastError }}</div>
-                            }
-
-                            <div class="node-card-actions">
-                              @if (task.status === 'pending') {
-                                <button
-                                  type="button"
-                                  class="btn btn-xs btn-primary btn-outline"
-                                  (click)="backend.dispatchTask(task.id)"
-                                >
-                                  立即派发
-                                </button>
-                              }
-                              @if (task.status === 'failed' || task.status === 'cancelled') {
-                                <button
-                                  type="button"
-                                  class="btn btn-xs btn-warning btn-outline"
-                                  (click)="backend.retryTaskWithEscalation(task.id)"
-                                >
-                                  升档重试
-                                </button>
-                              }
-                              @if (task.status === 'waiting_input' || task.status === 'waiting_approval') {
-                                <button
-                                  type="button"
-                                  class="btn btn-xs btn-success btn-outline"
-                                  (click)="nudgeWaitingTask(task)"
-                                >
-                                  唤醒继续
-                                </button>
-                              }
-                              @if (task.status === 'running' || task.status === 'waiting_input') {
-                                <button
-                                  type="button"
-                                  class="btn btn-xs btn-ghost text-error"
-                                  (click)="backend.cancelTask(task.id)"
-                                >
-                                  停止
-                                </button>
-                              }
+                            <div class="swarm-node-right">
                               @if (task.assignedNodeId && task.termexoTerminalId) {
                                 <button
                                   type="button"
-                                  class="btn btn-xs btn-ghost gap-1"
+                                  class="btn btn-xs btn-outline"
                                   (click)="inspectTerminal(task)"
                                 >
                                   <fleet-icon name="terminal" [size]="12" />
                                   <span>实时终端</span>
                                 </button>
                               }
+                              <span class="status-chip" [class]="'status-chip st-' + task.status">
+                                @if (task.status === 'running') {
+                                  <span class="pulse-dot green tiny"></span>
+                                }
+                                {{ statusLabel(task.status) }}
+                              </span>
                             </div>
-                          </article>
-                        }
-                      </div>
-                    </div>
-
-                    @if (!lastStage) {
-                      <div class="stage-connector" [class.flowing]="group.runningCount > 0" aria-hidden="true">
-                        <div class="connector-line"></div>
-                        <fleet-icon name="arrow-right" [size]="15" />
-                      </div>
-                    }
-                  }
-                </div>
-              </section>
-            }
-          </div>
-        }
-
-        @case ('tree') {
-          <header class="view-hero">
-            <div>
-              <h1>子 Agent 蜂群拓扑与护栏</h1>
-              <p>直观查看父 Agent 如何通过反向 MCP 派生子 Agent，实时监控嵌套深度、并行度与 Git Worktree 隔离。</p>
-            </div>
-          </header>
-
-          <div class="space-y-4">
-            @for (group of taskTreeByMission(); track group.mission.id) {
-              <section class="mission-card">
-                <div class="swarm-header">
-                  <div>
-                    <div class="mission-title">{{ group.mission.title }}</div>
-                    <div class="mission-sub">
-                      Worktree 自动隔离：{{ group.mission.guardrails.isolateWorktreeByDefault ? '已开启' : '未开启' }}
-                    </div>
-                  </div>
-                  <div class="guardrail-gauges">
-                    <div class="gauge">
-                      <div class="gauge-top">
-                        <span>递归深度</span>
-                        <strong>{{ group.maxObservedDepth }} / {{ group.mission.guardrails.maxDepth }}</strong>
-                      </div>
-                      <div class="gauge-bar">
-                        <div
-                          class="gauge-fill"
-                          [style.width.%]="percent(group.maxObservedDepth, group.mission.guardrails.maxDepth)"
-                        ></div>
-                      </div>
-                    </div>
-                    <div class="gauge">
-                      <div class="gauge-top">
-                        <span>活跃子 Agent</span>
-                        <strong>{{ group.activeSubagents }} / {{ group.mission.guardrails.maxConcurrency }}</strong>
-                      </div>
-                      <div class="gauge-bar">
-                        <div
-                          class="gauge-fill info"
-                          [style.width.%]="percent(group.activeSubagents, group.mission.guardrails.maxConcurrency)"
-                        ></div>
-                      </div>
-                    </div>
-                    <div class="gauge">
-                      <div class="gauge-top">
-                        <span>总派生预算</span>
-                        <strong>{{ group.totalSubagents }} / {{ group.mission.guardrails.maxSubagents }}</strong>
-                      </div>
-                      <div class="gauge-bar">
-                        <div
-                          class="gauge-fill warn"
-                          [style.width.%]="percent(group.totalSubagents, group.mission.guardrails.maxSubagents)"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="swarm-tree">
-                  @for (task of group.tasks; track task.id) {
-                    @let badge = agentBadge(task.assignedAgentType);
-                    <div class="swarm-branch" [style.paddingLeft.px]="task.depth * 34">
-                      @if (task.depth > 0) {
-                        <div class="branch-elbow" [style.left.px]="(task.depth - 1) * 34 + 14"></div>
+                          </div>
+                        </div>
                       }
-                      <div class="swarm-node-card" [class.is-running]="task.status === 'running'">
-                        <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">
-                          {{ badge.short }}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                          <div class="flex items-center gap-2 flex-wrap">
-                            <span class="depth-tag">{{ task.depth === 0 ? 'ROOT 主控' : '子 Agent · D' + task.depth }}</span>
-                            <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(task.difficulty)">
-                              {{ task.difficulty }}
-                            </span>
-                            <span class="font-semibold text-xs">{{ task.title }}</span>
-                          </div>
-                          <div class="swarm-node-meta">
-                            <span>节点 {{ task.assignedNodeId || '待分配' }}</span>
-                            <span>·</span>
-                            <span>{{ badge.name }} / {{ task.assignedModelName || '默认模型' }}</span>
-                            @if (task.worktreeBranch) {
-                              <span>·</span>
-                              <span class="text-primary">分支 {{ task.worktreeBranch }}</span>
-                            }
-                          </div>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                          @if (task.assignedNodeId && task.termexoTerminalId) {
-                            <button
-                              type="button"
-                              class="btn btn-xs btn-ghost gap-1"
-                              (click)="inspectTerminal(task)"
-                            >
-                              <fleet-icon name="terminal" [size]="12" />
-                              <span>终端</span>
-                            </button>
-                          }
-                          <span class="status-chip" [class]="'status-chip st-' + task.status">
-                            {{ statusLabel(task.status) }}
-                          </span>
-                        </div>
-                      </div>
                     </div>
-                  }
-                </div>
-              </section>
-            }
-          </div>
-        }
-
-        @case ('routing') {
-          <header class="view-hero">
-            <div>
-              <h1>难度路由天梯与账号池</h1>
-              <p>实时可视化 L1–L4 每档任务会派给哪台机器与账号；点击槽位上的档位胶囊即可调整分工。</p>
-            </div>
-            <div class="mode-switch">
-              <button
-                type="button"
-                class="mode-btn"
-                [class.active]="simulatorMode() === 'cost'"
-                (click)="simulatorMode.set('cost')"
-              >
-                省钱优先
-              </button>
-              <button
-                type="button"
-                class="mode-btn"
-                [class.active]="simulatorMode() === 'balanced'"
-                (click)="simulatorMode.set('balanced')"
-              >
-                均衡模式
-              </button>
-              <button
-                type="button"
-                class="mode-btn"
-                [class.active]="simulatorMode() === 'quality'"
-                (click)="simulatorMode.set('quality')"
-              >
-                质量优先
-              </button>
-            </div>
-          </header>
-
-          <section class="simulator-box">
-            <div class="sim-input-row">
-              <fleet-icon name="sparkles" [size]="16" />
-              <input
-                type="text"
-                class="sim-input"
-                placeholder="输入一句任务描述，实时测试难度评级与命中的账号模型..."
-                [ngModel]="simulatorPrompt()"
-                (ngModelChange)="simulatorPrompt.set($event)"
-              />
-            </div>
-            <div class="sim-result">
-              <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(simulatedRoute().tier)">
-                评估为 {{ simulatedRoute().tier }}
-              </span>
-              <span class="sim-reason">{{ simulatedRoute().reason }}</span>
-              <span class="sim-arrow">──▶</span>
-              @if (simulatedRoute().winner; as win) {
-                <span class="sim-winner">
-                  命中：<strong>{{ win.label }}</strong> ({{ win.nodeId }} · {{ win.modelName || win.agentType }})
-                </span>
-              } @else {
-                <span class="text-error text-xs">暂无可用健康槽位</span>
-              }
-            </div>
-          </section>
-
-          <div class="ladder-grid">
-            @for (item of routingLadder(); track item.tier) {
-              <div class="ladder-card" [class]="'ladder-card ' + tierToneClass(item.tier)">
-                <div class="ladder-top">
-                  <span class="ladder-tier">{{ item.meta.label }}</span>
-                  <span class="ladder-hint">{{ item.meta.hint }}</span>
-                </div>
-                @if (item.winner; as win) {
-                  @let badge = agentBadge(win.agentType);
-                  <div class="ladder-winner">
-                    <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">{{ badge.short }}</div>
-                    <div class="min-w-0">
-                      <div class="ladder-model">{{ win.modelName || badge.name }}</div>
-                      <div class="ladder-node">{{ win.nodeId }} · {{ win.label }}</div>
-                    </div>
-                  </div>
-                } @else {
-                  <div class="ladder-empty">未配置可用槽位</div>
+                  </section>
                 }
               </div>
             }
-          </div>
+          }
 
-          <div class="section-heading">
-            <span>全部账号与模型槽位</span>
-            <span class="section-meta">点击 L1–L4 胶囊即时切换负责档位</span>
-          </div>
+          <!-- ==================== 3. ROUTING LADDER & SLOTS ==================== -->
+          @case ('routing') {
+            <header class="view-intro-bar">
+              <p>{{ activeViewMeta().subtitle }}</p>
+              <div class="mode-switch" role="tablist" aria-label="路由策略模式">
+                <button
+                  type="button"
+                  class="mode-btn"
+                  [class.active]="simulatorMode() === 'cost'"
+                  (click)="simulatorMode.set('cost')"
+                >
+                  省钱优先
+                </button>
+                <button
+                  type="button"
+                  class="mode-btn"
+                  [class.active]="simulatorMode() === 'balanced'"
+                  (click)="simulatorMode.set('balanced')"
+                >
+                  均衡模式
+                </button>
+                <button
+                  type="button"
+                  class="mode-btn"
+                  [class.active]="simulatorMode() === 'quality'"
+                  (click)="simulatorMode.set('quality')"
+                >
+                  质量优先
+                </button>
+              </div>
+            </header>
 
-          <div class="slot-grid">
-            @for (slot of backend.slots(); track slot.id) {
-              @let badge = agentBadge(slot.agentType);
-              <article class="slot-card" [class.unhealthy]="slot.health !== 'healthy'">
-                <div class="slot-top">
-                  <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">{{ badge.short }}</div>
-                  <div class="min-w-0 flex-1">
-                    <div class="slot-name">{{ slot.label }}</div>
-                    <div class="slot-sub">{{ slot.nodeId }} · {{ slot.modelName || badge.name }} · {{ slot.modelFamily }}</div>
-                  </div>
-                  <span class="health-pill" [class]="'health-pill h-' + slot.health">
-                    {{ slot.health === 'healthy' ? '健康' : slot.health === 'rate_limited' ? '限流冷却' : '需重登' }}
-                  </span>
-                </div>
-
-                <div class="slot-metrics">
-                  <div class="metric-item">
-                    <span>并发槽位</span>
-                    <div class="pip-row">
-                      @for (i of slotsRange(slot.maxConcurrency); track i) {
-                        <span class="pip" [class.busy]="i < slot.activeCount"></span>
-                      }
-                      <small>{{ slot.activeCount }}/{{ slot.maxConcurrency }}</small>
-                    </div>
-                  </div>
-                  <div class="metric-item">
-                    <span>推理能力</span>
-                    <div class="pip-row">
-                      @for (i of slotsRange(5); track i) {
-                        <span class="pip quality" [class.filled]="i < slot.qualityTier"></span>
-                      }
-                    </div>
-                  </div>
-                  <div class="metric-item">
-                    <span>成本档</span>
-                    <div class="pip-row">
-                      @for (i of slotsRange(5); track i) {
-                        <span class="pip cost" [class.filled]="i < slot.costTier"></span>
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                <div class="slot-footer">
-                  <div class="slot-tiers">
-                    @for (tier of allTiers; track tier) {
-                      <button
-                        type="button"
-                        class="tier-toggle"
-                        [class.on]="slot.supportedTiers.includes(tier)"
-                        (click)="backend.toggleSlotTier(slot, tier)"
-                      >
-                        {{ tier }}
-                      </button>
-                    }
-                  </div>
-                  @if (slot.health !== 'healthy') {
+            <!-- Interactive Routing Simulator -->
+            @let sim = simulatedRoute();
+            <section class="simulator-box">
+              <div class="sim-top-bar">
+                <span class="sim-label">
+                  <fleet-icon name="sparkles" [size]="14" />
+                  <span>实时路由模拟器</span>
+                </span>
+                <div class="sim-samples">
+                  @for (sp of simulatorPresets; track sp.label) {
                     <button
                       type="button"
-                      class="btn btn-xs btn-warning btn-outline"
-                      (click)="backend.resetSlotHealth(slot.id)"
+                      class="sim-sample-chip"
+                      [class.active]="simulatorPrompt() === sp.prompt"
+                      (click)="simulatorPrompt.set(sp.prompt)"
                     >
-                      立即恢复
+                      <span class="sample-tier" [class]="'sample-tier ' + tierToneClass(sp.tier)">{{ sp.tier }}</span>
+                      <span>{{ sp.label }}</span>
                     </button>
                   }
                 </div>
-              </article>
-            }
-          </div>
-        }
-
-        @case ('inbox') {
-          <header class="view-hero">
-            <div>
-              <h1>全局待处理收件箱</h1>
-              <p>所有 Termexo 节点上等待审批、等待输入或触发限流的终端集中于此，支持一键快捷回复。</p>
-            </div>
-          </header>
-
-          @if (backend.attention().length === 0) {
-            <div class="empty-zen">
-              <div class="zen-ring">
-                <fleet-icon name="check" [size]="28" />
               </div>
-              <h3>所有舰队节点运行平稳</h3>
-              <p>当前没有任何终端卡在等待审批、输入或登录过期状态，你可以专注推进其他任务。</p>
-            </div>
-          } @else {
-            <div class="space-y-3">
-              @for (item of backend.attention(); track item.id) {
-                <article class="inbox-card">
-                  <div class="inbox-top">
-                    <span class="status-chip st-waiting_approval">{{ item.kind }}</span>
-                    <strong>{{ item.title }}</strong>
-                    <span class="mini-chip">{{ item.nodeName }}</span>
+
+              <div class="sim-input-row">
+                <input
+                  type="text"
+                  class="sim-input"
+                  placeholder="输入任意一句任务描述，实时测试语义难度评级与最终命中的机器、账号和模型..."
+                  [ngModel]="simulatorPrompt()"
+                  (ngModelChange)="simulatorPrompt.set($event)"
+                />
+              </div>
+
+              <div class="sim-result">
+                <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(sim.tier)">
+                  评估为 {{ sim.tier }} · {{ sim.costUnits }}
+                </span>
+                <span class="sim-reason">{{ sim.reason }}</span>
+                <fleet-icon name="arrow-right" [size]="13" class="sim-arrow-icon" />
+                @if (sim.winner; as win) {
+                  @let wBadge = agentBadge(win.agentType);
+                  <span class="sim-winner">
+                    <span class="mini-emblem" [class]="'mini-emblem ag-' + wBadge.tone">{{ wBadge.short }}</span>
+                    <strong>{{ win.label }}</strong>
+                    <span class="sim-winner-sub">{{ win.nodeId }} · {{ win.modelName || wBadge.name }}</span>
+                  </span>
+                } @else {
+                  <span class="text-error text-xs">暂无可用健康槽位</span>
+                }
+              </div>
+            </section>
+
+            <!-- 4-Column L1-L4 Routing Ladder -->
+            <div class="ladder-grid">
+              @for (item of routingLadder(); track item.tier) {
+                @let isMatched = sim.tier === item.tier;
+                <div
+                  class="ladder-card"
+                  [class]="'ladder-card ' + tierToneClass(item.tier)"
+                  [class.sim-matched]="isMatched"
+                >
+                  <div class="ladder-top">
+                    <div class="ladder-tier-row">
+                      <span class="ladder-tier">{{ item.meta.label }}</span>
+                      <span class="ladder-cost tabular-nums">{{ item.costUnits }}</span>
+                    </div>
+                    @if (isMatched) {
+                      <span class="matched-tag">模拟命中</span>
+                    } @else {
+                      <span class="ladder-hint">{{ item.meta.hint }}</span>
+                    }
                   </div>
-                  <p class="inbox-detail">{{ item.detail }}</p>
-                  @if (item.terminalId) {
-                    <div class="quick-reply-row">
-                      @for (qr of quickReplies; track qr.label) {
+
+                  @if (item.winner; as win) {
+                    @let badge = agentBadge(win.agentType);
+                    <div class="ladder-winner">
+                      <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">{{ badge.short }}</div>
+                      <div class="min-w-0 flex-1">
+                        <div class="ladder-model">{{ win.modelName || badge.name }}</div>
+                        <div class="ladder-node">{{ win.nodeId }} · {{ win.label }}</div>
+                      </div>
+                    </div>
+                    <div class="ladder-foot">
+                      <span>模型家族 {{ win.modelFamily }}</span>
+                      @if (item.backupsCount > 0) {
+                        <span class="backup-tag">+{{ item.backupsCount }} 备选槽位</span>
+                      }
+                    </div>
+                  } @else {
+                    <div class="ladder-empty">未配置可用健康槽位</div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Account & Model Slot Pool -->
+            <div class="section-heading">
+              <div class="section-heading-left">
+                <h2>账号与模型槽位池</h2>
+                <div class="filter-pills">
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    [class.active]="slotNodeFilter() === 'all'"
+                    (click)="slotNodeFilter.set('all')"
+                  >
+                    全部节点 <span class="pill-cnt tabular-nums">{{ backend.slots().length }}</span>
+                  </button>
+                  @for (node of backend.nodes(); track node.id) {
+                    <button
+                      type="button"
+                      class="filter-pill"
+                      [class.active]="slotNodeFilter() === node.id"
+                      (click)="slotNodeFilter.set(node.id)"
+                    >
+                      {{ node.name }}
+                    </button>
+                  }
+                </div>
+              </div>
+              <span class="section-meta">点击下方 L1–L4 胶囊即时切换该槽位承接的难度档位</span>
+            </div>
+
+            <div class="slot-grid">
+              @for (slot of filteredSlots(); track slot.id) {
+                @let badge = agentBadge(slot.agentType);
+                <article class="slot-card" [class.unhealthy]="slot.health !== 'healthy'">
+                  <div class="slot-top">
+                    <div class="agent-emblem" [class]="'agent-emblem ag-' + badge.tone">{{ badge.short }}</div>
+                    <div class="min-w-0 flex-1">
+                      <div class="slot-name">{{ slot.label }}</div>
+                      <div class="slot-sub">{{ slot.nodeId }} · {{ slot.modelName || badge.name }} · {{ slot.modelFamily }}</div>
+                    </div>
+                    <span class="health-pill" [class]="'health-pill h-' + slot.health">
+                      {{ slot.health === 'healthy' ? '健康' : slot.health === 'rate_limited' ? '限流冷却' : '需重登' }}
+                    </span>
+                  </div>
+
+                  <div class="slot-metrics">
+                    <div class="metric-item">
+                      <span>并发占用</span>
+                      <div class="pip-row">
+                        @for (i of slotsRange(slot.maxConcurrency); track i) {
+                          <span class="pip" [class.busy]="i < slot.activeCount"></span>
+                        }
+                        <small class="tabular-nums">{{ slot.activeCount }}/{{ slot.maxConcurrency }}</small>
+                      </div>
+                    </div>
+                    <div class="metric-item">
+                      <span>推理能力</span>
+                      <div class="pip-row">
+                        @for (i of slotsRange(5); track i) {
+                          <span class="pip quality" [class.filled]="i < slot.qualityTier"></span>
+                        }
+                      </div>
+                    </div>
+                    <div class="metric-item">
+                      <span>成本档</span>
+                      <div class="pip-row">
+                        @for (i of slotsRange(5); track i) {
+                          <span class="pip cost" [class.filled]="i < slot.costTier"></span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="slot-footer">
+                    <div class="slot-tiers">
+                      @for (tier of allTiers; track tier) {
                         <button
                           type="button"
-                          class="quick-chip"
-                          (click)="sendQuickReply(item.id, item.nodeId, item.terminalId, qr.text)"
+                          class="tier-toggle"
+                          [class]="'tier-toggle ' + tierToneClass(tier)"
+                          [class.on]="slot.supportedTiers.includes(tier)"
+                          (click)="backend.toggleSlotTier(slot, tier)"
                         >
-                          {{ qr.label }}
+                          {{ tier }}
                         </button>
                       }
                     </div>
-                    <div class="flex gap-2 mt-2">
-                      <input
-                        type="text"
-                        class="input input-bordered input-sm flex-1"
-                        placeholder="或输入自定义回复指令，发送到对应 Termexo 终端并提交回车..."
-                        [ngModel]="replyDrafts()[item.id] || ''"
-                        (ngModelChange)="updateReplyDraft(item.id, $event)"
-                      />
+                    @if (slot.health !== 'healthy') {
                       <button
                         type="button"
-                        class="btn btn-sm btn-primary"
-                        (click)="sendAttentionReply(item.id, item.nodeId, item.terminalId)"
+                        class="btn btn-xs btn-warning btn-outline"
+                        (click)="backend.resetSlotHealth(slot.id)"
                       >
-                        发送
+                        立即恢复
                       </button>
-                    </div>
-                  }
+                    }
+                  </div>
                 </article>
               }
             </div>
           }
-        }
 
-        @case ('nodes') {
-          <header class="view-hero">
-            <div>
-              <h1>多机 Termexo 舰队拓扑</h1>
-              <p>将本机、局域网与远程中继的多台 Termexo 编织成统一算力网，按标签亲和与负载智能派发。</p>
-            </div>
-            <div class="flex gap-2">
-              <button type="button" class="btn btn-sm btn-ghost gap-1.5" (click)="mcpDrawerOpen.set(true)">
-                <fleet-icon name="copy" [size]="14" />
-                <span>反向 MCP 接入配置</span>
-              </button>
-              <button type="button" class="btn btn-sm btn-primary gap-1.5" (click)="openNewNodeModal()">
-                <fleet-icon name="plus" [size]="14" />
-                <span>连接新 Termexo</span>
-              </button>
-            </div>
-          </header>
+          <!-- ==================== 4. GLOBAL ATTENTION INBOX ==================== -->
+          @case ('inbox') {
+            <header class="view-intro">
+              <p>{{ activeViewMeta().subtitle }}</p>
+            </header>
 
-          <section class="topology-canvas">
-            <div class="topology-hub">
-              <div class="hub-ring">
-                <img src="fleet-mark.svg" alt="Hub" class="hub-icon" />
+            @if (backend.attention().length === 0) {
+              <div class="empty-zen">
+                <div class="zen-ring">
+                  <fleet-icon name="check" [size]="28" />
+                </div>
+                <h3>所有舰队节点运行平稳</h3>
+                <p>当前没有任何终端卡在等待审批、输入或登录过期状态，你可以专注推进其他任务。</p>
+                <button type="button" class="btn btn-sm btn-outline mt-4" (click)="activeTab.set('missions')">
+                  返回任务指挥甲板
+                </button>
               </div>
-              <div class="hub-title">Termexo Fleet</div>
-              <div class="hub-sub">控制大脑 · {{ onlineNodeCount() }} 在线</div>
-              <div class="hub-mcp">MCP :7425</div>
-            </div>
+            } @else {
+              <div class="inbox-list">
+                @for (item of backend.attention(); track item.id) {
+                  <article class="inbox-card" [class]="'inbox-card tone-' + attentionKindTone(item.kind)">
+                    <div class="inbox-head">
+                      <div class="inbox-top">
+                        <span class="status-chip" [class]="'status-chip st-' + item.kind">
+                          {{ attentionKindLabel(item.kind) }}
+                        </span>
+                        <strong class="inbox-title">{{ item.title }}</strong>
+                        <span class="mini-chip">
+                          <fleet-icon name="server" [size]="10" />
+                          {{ item.nodeName }}
+                        </span>
+                        <span class="inbox-time">{{ formatRelativeTime(item.detectedAtMs) }}</span>
+                      </div>
 
-            <div class="topology-spokes" aria-hidden="true">
-              <div class="spoke-beam"></div>
-            </div>
-
-            <div class="topology-nodes">
-              @for (node of backend.nodes(); track node.id) {
-                @let os = nodeOsTag(node);
-                <article class="node-tile" [class.offline]="node.status !== 'online'">
-                  <div class="node-tile-top">
-                    <span class="os-badge" [class]="'os-badge os-' + os.tone">{{ os.label }}</span>
-                    <div class="min-w-0 flex-1">
-                      <div class="node-tile-name">{{ node.name }}</div>
-                      <div class="node-tile-endpoint">{{ node.endpoint }}</div>
+                      @if (item.terminalId) {
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline shrink-0"
+                          (click)="inspectAttentionTerminal(item)"
+                        >
+                          <fleet-icon name="terminal" [size]="12" />
+                          <span>查看终端上下文</span>
+                        </button>
+                      }
                     </div>
-                    <span class="pulse-dot" [class.green]="node.status === 'online'" [class.red]="node.status !== 'online'"></span>
-                  </div>
 
-                  <div class="node-load-block">
-                    <div class="flex justify-between text-[11px] text-base-content/70 mb-1">
-                      <span>并发负载</span>
-                      <span class="font-mono">{{ nodeActiveCount(node.id) }} / {{ node.maxConcurrency }}</span>
-                    </div>
-                    <div class="gauge-bar">
-                      <div class="gauge-fill" [style.width.%]="nodeLoadPercent(node)"></div>
-                    </div>
-                  </div>
+                    <p class="inbox-detail">{{ item.detail }}</p>
 
-                  <div class="node-tile-stats">
-                    <span>工作区 {{ backend.snapshots()[node.id]?.workspaces?.length ?? 0 }}</span>
-                    <span>·</span>
-                    <span>终端 {{ backend.snapshots()[node.id]?.terminals?.length ?? 0 }}</span>
-                    <span>·</span>
-                    <span>{{ node.transportType }}</span>
-                  </div>
-
-                  <div class="node-tile-tags">
-                    @for (tag of node.tags; track tag) {
-                      <span class="mini-chip">#{{ tag }}</span>
+                    @if (item.terminalId) {
+                      <div class="quick-reply-row">
+                        @for (qr of quickReplies; track qr.label) {
+                          <button
+                            type="button"
+                            class="quick-chip"
+                            (click)="sendQuickReply(item.id, item.nodeId, item.terminalId, qr.text)"
+                          >
+                            {{ qr.label }}
+                          </button>
+                        }
+                      </div>
+                      <div class="inbox-reply-form">
+                        <input
+                          type="text"
+                          class="input input-sm flex-1 font-mono text-xs"
+                          placeholder="输入自定义回复指令，按 Enter 发送到对应 Termexo 终端..."
+                          [ngModel]="replyDrafts()[item.id] || ''"
+                          (ngModelChange)="updateReplyDraft(item.id, $event)"
+                          (keydown.enter)="sendAttentionReply(item.id, item.nodeId, item.terminalId)"
+                        />
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-primary"
+                          (click)="sendAttentionReply(item.id, item.nodeId, item.terminalId)"
+                        >
+                          <fleet-icon name="send" [size]="12" />
+                          <span>发送</span>
+                        </button>
+                      </div>
                     }
-                  </div>
+                  </article>
+                }
+              </div>
+            }
+          }
 
-                  @if (node.lastError) {
-                    <div class="node-error">{{ node.lastError }}</div>
+          <!-- ==================== 5. FLEET TOPOLOGY ==================== -->
+          @case ('nodes') {
+            <header class="view-intro-bar">
+              <p>{{ activeViewMeta().subtitle }}</p>
+              <div class="flex gap-2 shrink-0">
+                <button type="button" class="btn btn-sm btn-outline" (click)="openMcpDrawer()">
+                  <fleet-icon name="copy" [size]="13" />
+                  <span>反向 MCP 接入配置</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" (click)="openNewNodeModal()">
+                  <fleet-icon name="plus" [size]="14" />
+                  <span>连接新 Termexo</span>
+                </button>
+              </div>
+            </header>
+
+            <section class="topology-canvas">
+              <div class="topology-hub">
+                <div class="hub-aura">
+                  <div class="hub-ring">
+                    <img src="fleet-mark.svg" alt="Termexo Fleet Hub" class="hub-icon" />
+                  </div>
+                </div>
+                <div class="hub-title">Termexo Fleet</div>
+                <div class="hub-sub">本地控制大脑</div>
+
+                <div class="hub-stats-grid">
+                  <div class="hub-stat">
+                    <strong class="tabular-nums">{{ onlineNodeCount() }}/{{ backend.nodes().length }}</strong>
+                    <span>在线节点</span>
+                  </div>
+                  <div class="hub-stat">
+                    <strong class="tabular-nums">{{ totalNodeCapacity() }}</strong>
+                    <span>总并发槽</span>
+                  </div>
+                </div>
+
+                <button type="button" class="hub-mcp-btn" (click)="openMcpDrawer()" title="查看反向 MCP 配置">
+                  <span class="pulse-dot green tiny"></span>
+                  <span>MCP :7425</span>
+                </button>
+              </div>
+
+              <div class="topology-spokes" aria-hidden="true">
+                <div class="spoke-beam" [class.active]="onlineNodeCount() > 0"></div>
+                <span class="spoke-node-dot"></span>
+              </div>
+
+              @if (backend.nodes().length === 0) {
+                <div class="empty-zen compact">
+                  <div class="zen-ring subtle">
+                    <fleet-icon name="radar" [size]="24" />
+                  </div>
+                  <h3>尚未接入任何 Termexo 节点</h3>
+                  <p>连接本机或局域网/Tailscale 中的 Termexo 实例，即可开始跨机智能调度。</p>
+                  <button type="button" class="btn btn-sm btn-primary mt-3" (click)="openNewNodeModal()">
+                    <fleet-icon name="plus" [size]="13" />
+                    <span>连接第一台 Termexo</span>
+                  </button>
+                </div>
+              } @else {
+                <div class="topology-nodes">
+                  @for (node of backend.nodes(); track node.id) {
+                    @let os = nodeOsTag(node);
+                    @let snap = backend.snapshots()[node.id];
+                    <article class="node-tile" [class.offline]="node.status !== 'online'">
+                      <div class="node-tile-top">
+                        <span class="os-badge" [class]="'os-badge os-' + os.tone">{{ os.label }}</span>
+                        <div class="min-w-0 flex-1">
+                          <div class="node-tile-name">{{ node.name }}</div>
+                          <button
+                            type="button"
+                            class="node-tile-endpoint"
+                            title="点击复制节点 MCP 地址"
+                            (click)="copyText('ep-' + node.id, node.endpoint, '已复制节点地址')"
+                          >
+                            <span>{{ node.endpoint }}</span>
+                            <fleet-icon [name]="isCopied('ep-' + node.id) ? 'check' : 'copy'" [size]="10" />
+                          </button>
+                        </div>
+                        <span class="node-status-pill" [class.online]="node.status === 'online'">
+                          <span
+                            class="pulse-dot tiny"
+                            [class.green]="node.status === 'online'"
+                            [class.red]="node.status !== 'online'"
+                          ></span>
+                          <span>{{ node.status === 'online' ? '在线' : node.status === 'degraded' ? '降级' : '离线' }}</span>
+                        </span>
+                      </div>
+
+                      <div class="node-load-block">
+                        <div class="node-load-head">
+                          <span>并发负载</span>
+                          <span class="font-mono tabular-nums">
+                            {{ nodeActiveCount(node.id) }} / {{ node.maxConcurrency }}
+                          </span>
+                        </div>
+                        <div class="gauge-bar">
+                          <div class="gauge-fill" [style.width.%]="nodeLoadPercent(node)"></div>
+                        </div>
+                      </div>
+
+                      <div class="node-tile-stats">
+                        <span>
+                          <fleet-icon name="folder" [size]="11" />
+                          工作区 {{ snap?.workspaces?.length ?? 0 }}
+                        </span>
+                        <span class="sub-dot">·</span>
+                        <span>
+                          <fleet-icon name="terminal" [size]="11" />
+                          终端 {{ snap?.terminals?.length ?? 0 }}
+                        </span>
+                        <span class="sub-dot">·</span>
+                        <span>{{ transportLabel(node.transportType) }}</span>
+                      </div>
+
+                      @if (snap?.workspaces?.length) {
+                        <div class="node-ws-preview">
+                          @for (ws of snap!.workspaces.slice(0, 3); track ws.id) {
+                            <span class="ws-chip" [title]="ws.projectPath">{{ ws.name }}</span>
+                          }
+                        </div>
+                      }
+
+                      <div class="node-tile-tags">
+                        @for (tag of node.tags; track tag) {
+                          <span class="mini-chip">#{{ tag }}</span>
+                        }
+                      </div>
+
+                      @if (node.lastError) {
+                        <div class="node-error">
+                          <fleet-icon name="alert" [size]="11" />
+                          <span>{{ node.lastError }}</span>
+                        </div>
+                      }
+
+                      <div class="node-tile-actions">
+                        <span class="node-sync-time">{{ formatRelativeTime(node.lastHeartbeatMs) }}</span>
+                        <div class="flex items-center gap-1.5">
+                          @if (confirmingRemoveNodeId() === node.id) {
+                            <button
+                              type="button"
+                              class="btn btn-xs btn-ghost"
+                              (click)="cancelRemoveNode()"
+                            >
+                              取消
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-xs btn-danger-confirm"
+                              (click)="confirmRemoveNode(node.id)"
+                            >
+                              确认移除
+                            </button>
+                          } @else {
+                            <button type="button" class="btn btn-xs btn-ghost" (click)="editNode(node)">
+                              <fleet-icon name="edit" [size]="11" />
+                              <span>编辑</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-xs btn-outline"
+                              [disabled]="backend.busy()"
+                              (click)="backend.syncNode(node.id)"
+                            >
+                              <fleet-icon name="refresh" [size]="11" />
+                              <span>同步</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-xs btn-ghost text-error"
+                              title="移除节点"
+                              (click)="requestRemoveNode(node.id)"
+                            >
+                              <fleet-icon name="trash" [size]="11" />
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    </article>
                   }
-
-                  <div class="node-tile-actions">
-                    <button type="button" class="btn btn-xs btn-ghost" (click)="editNode(node)">编辑</button>
-                    <button type="button" class="btn btn-xs btn-outline" (click)="backend.syncNode(node.id)">
-                      同步
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-xs btn-ghost text-error"
-                      (click)="backend.removeNode(node.id)"
-                    >
-                      移除
-                    </button>
-                  </div>
-                </article>
+                </div>
               }
-            </div>
-          </section>
-        }
+            </section>
+          }
 
-        @case ('analytics') {
-          @let stats = backend.analytics();
-          <header class="view-hero">
-            <div>
-              <h1>效能账本与告警通知</h1>
-              <p>量化 L1–L4 难度路由节省的计算成本、追踪各模型与机器成功率，并配置 Webhook / 微信联动告警。</p>
-            </div>
-            <div class="flex gap-2">
+          <!-- ==================== 6. ANALYTICS & NOTIFICATIONS ==================== -->
+          @case ('analytics') {
+            @let stats = backend.analytics();
+            <header class="view-intro-bar">
+              <p>{{ activeViewMeta().subtitle }}</p>
               <button
                 type="button"
-                class="btn btn-sm btn-outline gap-1.5"
+                class="btn btn-sm btn-outline shrink-0"
                 [disabled]="backend.busy()"
                 (click)="triggerTestNotification()"
               >
-                <fleet-icon name="bell" [size]="14" />
+                <fleet-icon name="bell" [size]="13" />
                 <span>发送测试告警</span>
               </button>
-            </div>
-          </header>
+            </header>
 
-          <section class="kpi-grid">
-            <article class="kpi-card">
-              <div class="kpi-label">总执行成功率</div>
-              <div class="kpi-value accent">{{ stats.successRatePercent }}%</div>
-              <div class="kpi-sub">
-                完成 {{ stats.completedRuns }} / 失败 {{ stats.failedRuns }} · 共 {{ stats.totalRuns }} 次
-              </div>
-            </article>
-            <article class="kpi-card">
-              <div class="kpi-label">平均单任务耗时</div>
-              <div class="kpi-value">{{ formatDuration(stats.avgDurationMs) }}</div>
-              <div class="kpi-sub">覆盖本地与局域网全部节点</div>
-            </article>
-            <article class="kpi-card">
-              <div class="kpi-label">难度路由估算节省</div>
-              <div class="kpi-value success">{{ stats.estimatedSavingsPercent }}%</div>
-              <div class="kpi-sub">
-                实际 {{ stats.totalCostUnits }} 单位 vs 全量 L3 基准 {{ stats.baselineL3CostUnits }}
-              </div>
-            </article>
-            <article class="kpi-card">
-              <div class="kpi-label">自动容灾 / 升档次数</div>
-              <div class="kpi-value warn">{{ stats.escalatedRuns }}</div>
-              <div class="kpi-sub">失败后自动切换健康槽位或升档重试</div>
-            </article>
-          </section>
-
-          <section class="analytics-panels">
-            <article class="panel-card">
-              <div class="panel-head">
-                <h3>L1–L4 难度分布</h3>
-                <span class="panel-sub">按执行次数与相对成本单位</span>
-              </div>
-              @if (stats.byTier.length === 0) {
-                <div class="panel-empty">暂无执行记录，完成任意任务后自动汇总</div>
-              } @else {
-                <div class="bar-list">
-                  @for (bucket of stats.byTier; track bucket.key) {
-                    <div class="bar-row">
-                      <span class="tier-chip" [class]="'tier-chip tier-' + bucket.key.toLowerCase()">
-                        {{ bucket.key }}
-                      </span>
-                      <div class="bar-track">
-                        <div
-                          class="bar-fill"
-                          [class]="'bar-fill bar-' + bucket.key.toLowerCase()"
-                          [style.width.%]="percent(bucket.total, maxBucketTotal(stats.byTier))"
-                        ></div>
-                      </div>
-                      <span class="bar-meta">
-                        {{ bucket.total }} 次 · 均 {{ formatDuration(bucket.avgDurationMs) }}
-                      </span>
-                    </div>
-                  }
+            <section class="kpi-grid">
+              <article class="kpi-card tone-accent">
+                <div class="kpi-top">
+                  <span class="kpi-label">总执行成功率</span>
+                  <span class="kpi-icon"><fleet-icon name="shield" [size]="14" /></span>
                 </div>
-              }
-            </article>
-
-            <article class="panel-card">
-              <div class="panel-head">
-                <h3>模型与节点效能排行</h3>
-                <span class="panel-sub">成功率与平均耗时对比</span>
-              </div>
-              @if (stats.byModel.length === 0) {
-                <div class="panel-empty">暂无模型执行数据</div>
-              } @else {
-                <div class="bar-list">
-                  @for (bucket of stats.byModel; track bucket.key) {
-                    <div class="bar-row">
-                      <span class="bar-label" [title]="bucket.key">{{ bucket.key }}</span>
-                      <div class="bar-track">
-                        <div
-                          class="bar-fill bar-model"
-                          [style.width.%]="percent(bucket.total, maxBucketTotal(stats.byModel))"
-                        ></div>
-                      </div>
-                      <span class="bar-meta">
-                        {{ bucket.completed }}/{{ bucket.total }} 成功 · {{ formatDuration(bucket.avgDurationMs) }}
-                      </span>
-                    </div>
-                  }
+                <div class="kpi-value accent tabular-nums">{{ stats.successRatePercent }}%</div>
+                <div class="kpi-sub tabular-nums">
+                  完成 {{ stats.completedRuns }} / 失败 {{ stats.failedRuns }} · 共 {{ stats.totalRuns }} 次
                 </div>
-                @if (stats.byNode.length > 0) {
-                  <div class="node-breakdown-row">
-                    @for (nb of stats.byNode; track nb.key) {
-                      <span class="mini-chip">
-                        节点 {{ nb.key }} · {{ nb.total }} 次 ({{ nb.completed }} 成功)
-                      </span>
+              </article>
+
+              <article class="kpi-card tone-info">
+                <div class="kpi-top">
+                  <span class="kpi-label">平均单任务耗时</span>
+                  <span class="kpi-icon"><fleet-icon name="clock" [size]="14" /></span>
+                </div>
+                <div class="kpi-value tabular-nums">{{ formatDuration(stats.avgDurationMs) }}</div>
+                <div class="kpi-sub">覆盖本机与局域网全部节点</div>
+              </article>
+
+              <article class="kpi-card tone-success">
+                <div class="kpi-top">
+                  <span class="kpi-label">难度路由估算节省</span>
+                  <span class="kpi-icon"><fleet-icon name="chart" [size]="14" /></span>
+                </div>
+                <div class="kpi-value success tabular-nums">{{ stats.estimatedSavingsPercent }}%</div>
+                <div class="kpi-meter">
+                  <div class="kpi-meter-fill" [style.width.%]="stats.estimatedSavingsPercent"></div>
+                </div>
+                <div class="kpi-sub tabular-nums">
+                  实际 {{ stats.totalCostUnits }} u vs 全量 L3 基准 {{ stats.baselineL3CostUnits }} u
+                </div>
+              </article>
+
+              <article class="kpi-card tone-warn">
+                <div class="kpi-top">
+                  <span class="kpi-label">自动容灾 / 升档次数</span>
+                  <span class="kpi-icon"><fleet-icon name="activity" [size]="14" /></span>
+                </div>
+                <div class="kpi-value warn tabular-nums">{{ stats.escalatedRuns }}</div>
+                <div class="kpi-sub">限流或失败后自动切号并升档重试</div>
+              </article>
+            </section>
+
+            <section class="analytics-panels">
+              <article class="panel-card">
+                <div class="panel-head">
+                  <h3>L1–L4 难度分布</h3>
+                  <span class="panel-sub">执行频次与平均耗时</span>
+                </div>
+                @if (stats.byTier.length === 0) {
+                  <div class="panel-empty">暂无执行记录，完成任意任务后自动汇总</div>
+                } @else {
+                  <div class="bar-list">
+                    @for (bucket of stats.byTier; track bucket.key) {
+                      <div class="bar-row tier-bar-row">
+                        <span class="tier-chip" [class]="'tier-chip tier-' + bucket.key.toLowerCase()">
+                          {{ bucket.key }}
+                        </span>
+                        <div class="bar-track">
+                          <div
+                            class="bar-fill"
+                            [class]="'bar-fill bar-' + bucket.key.toLowerCase()"
+                            [style.width.%]="percent(bucket.total, maxBucketTotal(stats.byTier))"
+                          ></div>
+                        </div>
+                        <span class="bar-meta tabular-nums">
+                          {{ bucket.total }} 次 · 均 {{ formatDuration(bucket.avgDurationMs) }}
+                        </span>
+                      </div>
                     }
                   </div>
                 }
-              }
-            </article>
-          </section>
+              </article>
 
-          <section class="panel-card mb-4">
-            <div class="panel-head">
-              <div>
-                <h3>多通道告警与通知中心</h3>
-                <p class="panel-sub">
-                  支持飞书 / 企微 / Slack / 通用 JSON Webhook，或直接复用已连接 Termexo 的微信通知通道
-                </p>
-              </div>
-              <button
-                type="button"
-                class="btn btn-sm btn-primary"
-                [disabled]="backend.busy()"
-                (click)="saveNotificationConfig()"
-              >
-                保存配置
-              </button>
-            </div>
-
-            <div class="notify-grid">
-              <div class="notify-channel">
-                <label class="toggle-row">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-xs checkbox-primary"
-                    [ngModel]="notifyWebhookEnabled()"
-                    (ngModelChange)="notifyWebhookEnabled.set($event)"
-                  />
-                  <span>启用 Webhook JSON 推送</span>
-                </label>
-                <input
-                  type="url"
-                  class="input input-bordered input-sm font-mono w-full mt-2"
-                  placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
-                  [ngModel]="notifyWebhookUrl()"
-                  (ngModelChange)="notifyWebhookUrl.set($event)"
-                />
-              </div>
-
-              <div class="notify-channel">
-                <label class="toggle-row">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-xs checkbox-success"
-                    [ngModel]="notifyWechatViaTermexo()"
-                    (ngModelChange)="notifyWechatViaTermexo.set($event)"
-                  />
-                  <span>联动 Termexo 微信通知（wechat_notify）</span>
-                </label>
-                <p class="text-[11px] text-base-content/60 mt-2">
-                  自动经由在线的 Termexo 节点转发到你已绑定的微信提醒通道，无需重复扫码配置。
-                </p>
-              </div>
-            </div>
-
-            <div class="event-toggles">
-              <label class="event-chip">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-xs checkbox-primary"
-                  [ngModel]="notifyOnCompleted()"
-                  (ngModelChange)="notifyOnCompleted.set($event)"
-                />
-                <span>Mission 完成</span>
-              </label>
-              <label class="event-chip">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-xs checkbox-error"
-                  [ngModel]="notifyOnFailed()"
-                  (ngModelChange)="notifyOnFailed.set($event)"
-                />
-                <span>任务失败 / 重试耗尽</span>
-              </label>
-              <label class="event-chip">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-xs checkbox-warning"
-                  [ngModel]="notifyOnApproval()"
-                  (ngModelChange)="notifyOnApproval.set($event)"
-                />
-                <span>终端等待人工审批</span>
-              </label>
-              <label class="event-chip">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-xs checkbox-info"
-                  [ngModel]="notifyOnSlotUnhealthy()"
-                  (ngModelChange)="notifyOnSlotUnhealthy.set($event)"
-                />
-                <span>账号限流 / 登录过期</span>
-              </label>
-            </div>
-
-            @if (notifyTestFeedback()) {
-              <div class="notify-feedback">{{ notifyTestFeedback() }}</div>
-            }
-          </section>
-
-          <section class="panel-card">
-            <div class="panel-head">
-              <h3>执行账本明细</h3>
-              <span class="panel-sub">最近 {{ backend.executionRecords().length }} 条终态执行记录</span>
-            </div>
-            @if (backend.executionRecords().length === 0) {
-              <div class="panel-empty">尚无历史执行记录</div>
-            } @else {
-              <div class="ledger-table-wrap">
-                <table class="ledger-table">
-                  <thead>
-                    <tr>
-                      <th>任务</th>
-                      <th>档位</th>
-                      <th>模型 / 节点</th>
-                      <th>状态</th>
-                      <th>耗时</th>
-                      <th>成本单位</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (rec of backend.executionRecords(); track rec.id) {
-                      <tr>
-                        <td>
-                          <div class="font-medium">{{ rec.taskTitle }}</div>
-                          @if (rec.escalated) {
-                            <span class="mini-chip cross">容灾升档 ×{{ rec.retryCount }}</span>
-                          }
-                        </td>
-                        <td>
-                          <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(rec.difficulty)">
-                            {{ rec.difficulty }}
-                          </span>
-                        </td>
-                        <td class="font-mono text-xs">
-                          <div>{{ rec.modelName }}</div>
-                          <div class="text-base-content/50">{{ rec.nodeId }}</div>
-                        </td>
-                        <td>
-                          <span class="status-chip" [class]="'status-chip st-' + rec.status">
-                            {{ statusLabel(rec.status) }}
-                          </span>
-                        </td>
-                        <td class="font-mono text-xs">{{ formatDuration(rec.durationMs) }}</td>
-                        <td class="font-mono text-xs">{{ rec.estimatedCostUnits }} u</td>
-                      </tr>
+              <article class="panel-card">
+                <div class="panel-head">
+                  <h3>模型与节点效能排行</h3>
+                  <span class="panel-sub">成功率与响应耗时对比</span>
+                </div>
+                @if (stats.byModel.length === 0) {
+                  <div class="panel-empty">暂无模型执行数据</div>
+                } @else {
+                  <div class="bar-list">
+                    @for (bucket of stats.byModel; track bucket.key) {
+                      <div class="bar-row">
+                        <span class="bar-label" [title]="bucket.key">{{ bucket.key }}</span>
+                        <div class="bar-track">
+                          <div
+                            class="bar-fill bar-model"
+                            [style.width.%]="percent(bucket.total, maxBucketTotal(stats.byModel))"
+                          ></div>
+                        </div>
+                        <span class="bar-meta tabular-nums">
+                          {{ bucket.completed }}/{{ bucket.total }} 成功 · {{ formatDuration(bucket.avgDurationMs) }}
+                        </span>
+                      </div>
                     }
-                  </tbody>
-                </table>
+                  </div>
+                  @if (stats.byNode.length > 0) {
+                    <div class="node-breakdown-row">
+                      @for (nb of stats.byNode; track nb.key) {
+                        <span class="mini-chip">
+                          <fleet-icon name="server" [size]="10" />
+                          {{ nb.key }} · {{ nb.total }} 次 ({{ nb.completed }} 成功)
+                        </span>
+                      }
+                    </div>
+                  }
+                }
+              </article>
+            </section>
+
+            <!-- Redesigned Multi-Channel Alert Center -->
+            <section class="panel-card mb-4">
+              <div class="panel-head">
+                <div>
+                  <h3>多通道告警与通知中心</h3>
+                  <p class="panel-sub">
+                    支持飞书 / 企业微信 / Slack / 通用 JSON Webhook，或直接复用已连接 Termexo 的微信通知通道
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  [disabled]="backend.busy()"
+                  (click)="saveNotificationConfig()"
+                >
+                  保存配置
+                </button>
               </div>
-            }
-          </section>
+
+              <div class="notify-grid">
+                <div class="notify-channel" [class.enabled]="notifyWebhookEnabled()">
+                  <div class="notify-channel-head">
+                    <div class="notify-ch-title">
+                      <span class="notify-icon"><fleet-icon name="webhook" [size]="14" /></span>
+                      <span>Webhook JSON 推送</span>
+                    </div>
+                    <label class="ui-switch">
+                      <input
+                        type="checkbox"
+                        [ngModel]="notifyWebhookEnabled()"
+                        (ngModelChange)="notifyWebhookEnabled.set($event)"
+                      />
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <input
+                    type="url"
+                    class="input input-sm font-mono w-full mt-3"
+                    placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                    [ngModel]="notifyWebhookUrl()"
+                    (ngModelChange)="notifyWebhookUrl.set($event)"
+                  />
+                  <div class="notify-tags">
+                    <span>飞书</span>
+                    <span>企业微信</span>
+                    <span>Slack</span>
+                    <span>Discord / 自定义 JSON</span>
+                  </div>
+                </div>
+
+                <div class="notify-channel" [class.enabled]="notifyWechatViaTermexo()">
+                  <div class="notify-channel-head">
+                    <div class="notify-ch-title">
+                      <span class="notify-icon wechat"><fleet-icon name="message" [size]="14" /></span>
+                      <span>联动 Termexo 微信通知</span>
+                    </div>
+                    <label class="ui-switch">
+                      <input
+                        type="checkbox"
+                        [ngModel]="notifyWechatViaTermexo()"
+                        (ngModelChange)="notifyWechatViaTermexo.set($event)"
+                      />
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <p class="notify-desc">
+                    自动经由在线的 Termexo 节点调用 <code>wechat_notify</code> 转发至已绑定的微信提醒通道，无需重复扫码配置。
+                  </p>
+                </div>
+              </div>
+
+              <div class="event-triggers-wrap">
+                <span class="triggers-label">触发事件</span>
+                <div class="event-toggles">
+                  <button
+                    type="button"
+                    class="event-pill tone-success"
+                    [class.active]="notifyOnCompleted()"
+                    (click)="notifyOnCompleted.set(!notifyOnCompleted())"
+                  >
+                    <span class="event-check">
+                      @if (notifyOnCompleted()) {
+                        <fleet-icon name="check" [size]="10" />
+                      }
+                    </span>
+                    <span>Mission 完成</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="event-pill tone-danger"
+                    [class.active]="notifyOnFailed()"
+                    (click)="notifyOnFailed.set(!notifyOnFailed())"
+                  >
+                    <span class="event-check">
+                      @if (notifyOnFailed()) {
+                        <fleet-icon name="check" [size]="10" />
+                      }
+                    </span>
+                    <span>任务失败 / 重试耗尽</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="event-pill tone-warn"
+                    [class.active]="notifyOnApproval()"
+                    (click)="notifyOnApproval.set(!notifyOnApproval())"
+                  >
+                    <span class="event-check">
+                      @if (notifyOnApproval()) {
+                        <fleet-icon name="check" [size]="10" />
+                      }
+                    </span>
+                    <span>终端等待人工审批</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="event-pill tone-info"
+                    [class.active]="notifyOnSlotUnhealthy()"
+                    (click)="notifyOnSlotUnhealthy.set(!notifyOnSlotUnhealthy())"
+                  >
+                    <span class="event-check">
+                      @if (notifyOnSlotUnhealthy()) {
+                        <fleet-icon name="check" [size]="10" />
+                      }
+                    </span>
+                    <span>账号限流 / 登录过期</span>
+                  </button>
+                </div>
+              </div>
+
+              @if (notifyTestFeedback()) {
+                <div class="notify-feedback">{{ notifyTestFeedback() }}</div>
+              }
+            </section>
+
+            <!-- Execution Ledger Table -->
+            <section class="panel-card">
+              <div class="panel-head">
+                <h3>执行账本明细</h3>
+                <span class="panel-sub tabular-nums">最近 {{ backend.executionRecords().length }} 条终态执行记录</span>
+              </div>
+              @if (backend.executionRecords().length === 0) {
+                <div class="panel-empty">尚无历史执行记录</div>
+              } @else {
+                <div class="ledger-table-wrap">
+                  <table class="ledger-table">
+                    <thead>
+                      <tr>
+                        <th>任务</th>
+                        <th>档位</th>
+                        <th>模型 / 节点</th>
+                        <th>状态</th>
+                        <th class="text-right">耗时</th>
+                        <th class="text-right">成本单位</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (rec of backend.executionRecords(); track rec.id) {
+                        <tr>
+                          <td>
+                            <div class="ledger-task-title">{{ rec.taskTitle }}</div>
+                            @if (rec.escalated) {
+                              <span class="mini-chip cross mt-1">容灾升档 ×{{ rec.retryCount }}</span>
+                            }
+                          </td>
+                          <td>
+                            <span class="tier-chip" [class]="'tier-chip ' + tierToneClass(rec.difficulty)">
+                              {{ rec.difficulty }}
+                            </span>
+                          </td>
+                          <td class="font-mono text-xs">
+                            <div class="ledger-model">{{ rec.modelName }}</div>
+                            <div class="ledger-node">{{ rec.nodeId }}</div>
+                          </td>
+                          <td>
+                            <span class="status-chip" [class]="'status-chip st-' + rec.status">
+                              {{ statusLabel(rec.status) }}
+                            </span>
+                          </td>
+                          <td class="font-mono text-xs text-right tabular-nums">{{ formatDuration(rec.durationMs) }}</td>
+                          <td class="font-mono text-xs text-right tabular-nums">{{ rec.estimatedCostUnits }} u</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+          }
         }
-      }
+      </div>
     </main>
   </div>
 
+  <!-- ==================== MODAL: CONNECT / EDIT TERMEXO NODE ==================== -->
   @if (nodeModalOpen()) {
-    <div class="modal-backdrop" (click)="nodeModalOpen.set(false)">
+    <div class="fleet-modal-backdrop" (click)="nodeModalOpen.set(false)">
       <div class="modal-panel" (click)="$event.stopPropagation()">
         <div class="modal-head">
           <div>
             <h2>{{ editingNodeId() ? '编辑 Termexo 节点' : '连接 Termexo 节点' }}</h2>
-            <p>支持本机、局域网/VPN 或 Relay 隧道，Access Token 仅保存在本机系统钥匙串。</p>
+            <p>支持本机、局域网/VPN 或 Relay 隧道，Access Token 仅存入本机系统钥匙串。</p>
           </div>
-          <button type="button" class="btn btn-xs btn-ghost" (click)="nodeModalOpen.set(false)">
-            <fleet-icon name="close" [size]="14" />
+          <button type="button" class="icon-ghost-btn" (click)="nodeModalOpen.set(false)" aria-label="关闭弹窗">
+            <fleet-icon name="close" [size]="15" />
           </button>
         </div>
 
         @if (!editingNodeId()) {
-          <div class="preset-strip mb-3">
-            <span class="preset-label">快捷预设</span>
-            <button type="button" class="preset-chip" (click)="applyNodePreset('local')">本机默认 (:7421)</button>
-            <button type="button" class="preset-chip" (click)="applyNodePreset('lan')">局域网构建机 (LAN)</button>
-            <button type="button" class="preset-chip" (click)="applyNodePreset('tailscale')">Tailscale VPN</button>
+          <div class="node-preset-grid mb-4">
+            <button
+              type="button"
+              class="node-preset-card"
+              [class.active]="nodeTransport() === 'local'"
+              (click)="applyNodePreset('local')"
+            >
+              <fleet-icon name="cpu" [size]="15" />
+              <div>
+                <strong>本机默认</strong>
+                <span>127.0.0.1:7421</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="node-preset-card"
+              [class.active]="nodeTransport() === 'lan' && !nodeEndpoint().includes('100.64.')"
+              (click)="applyNodePreset('lan')"
+            >
+              <fleet-icon name="server" [size]="15" />
+              <div>
+                <strong>局域网构建机</strong>
+                <span>LAN :7421</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="node-preset-card"
+              [class.active]="nodeEndpoint().includes('100.64.')"
+              (click)="applyNodePreset('tailscale')"
+            >
+              <fleet-icon name="globe" [size]="15" />
+              <div>
+                <strong>Tailscale VPN</strong>
+                <span>100.64.x.x</span>
+              </div>
+            </button>
           </div>
         }
 
@@ -1388,7 +2125,7 @@
             <span>节点名称</span>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm"
               [ngModel]="nodeName()"
               (ngModelChange)="nodeName.set($event)"
             />
@@ -1396,7 +2133,7 @@
           <label class="adv-field">
             <span>接入方式</span>
             <select
-              class="select select-bordered select-sm"
+              class="select select-sm"
               [ngModel]="nodeTransport()"
               (ngModelChange)="nodeTransport.set($event)"
             >
@@ -1411,7 +2148,7 @@
           <span>Termexo MCP 地址</span>
           <input
             type="text"
-            class="input input-bordered input-sm font-mono"
+            class="input input-sm font-mono"
             [ngModel]="nodeEndpoint()"
             (ngModelChange)="nodeEndpoint.set($event)"
           />
@@ -1419,13 +2156,23 @@
 
         <label class="adv-field mb-3">
           <span>MCP Access Token</span>
-          <input
-            type="password"
-            class="input input-bordered input-sm font-mono"
-            placeholder="从 Termexo 设置 → AI 操控（MCP）复制"
-            [ngModel]="nodeToken()"
-            (ngModelChange)="nodeToken.set($event)"
-          />
+          <div class="token-input-wrap">
+            <input
+              [type]="nodeTokenVisible() ? 'text' : 'password'"
+              class="input input-sm font-mono w-full pr-9"
+              placeholder="从 Termexo「设置 → AI 操控（MCP）」复制"
+              [ngModel]="nodeToken()"
+              (ngModelChange)="nodeToken.set($event)"
+            />
+            <button
+              type="button"
+              class="token-eye-btn"
+              (click)="nodeTokenVisible.set(!nodeTokenVisible())"
+              [title]="nodeTokenVisible() ? '隐藏 Token' : '显示 Token'"
+            >
+              <fleet-icon [name]="nodeTokenVisible() ? 'eye-off' : 'eye'" [size]="14" />
+            </button>
+          </div>
         </label>
 
         <div class="grid grid-cols-2 gap-3 mb-3">
@@ -1433,7 +2180,8 @@
             <span>亲和标签（逗号分隔）</span>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm"
+              placeholder="如 local, windows, gpu"
               [ngModel]="nodeTags()"
               (ngModelChange)="nodeTags.set($event)"
             />
@@ -1444,30 +2192,33 @@
               type="number"
               min="1"
               max="16"
-              class="input input-bordered input-sm"
+              class="input input-sm"
               [ngModel]="nodeMaxConcurrency()"
               (ngModelChange)="nodeMaxConcurrency.set($event)"
             />
           </label>
         </div>
 
-        <label class="toggle-row mb-3">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-xs checkbox-primary"
-            [ngModel]="nodeAllowInsecureTls()"
-            (ngModelChange)="nodeAllowInsecureTls.set($event)"
-          />
-          <span class="text-xs">允许自签名 HTTPS 证书（仅限局域网 / Tailscale / 内网反代场景）</span>
-        </label>
+        <div class="modal-switch-row mb-4">
+          <label class="ui-switch">
+            <input
+              type="checkbox"
+              [ngModel]="nodeAllowInsecureTls()"
+              (ngModelChange)="nodeAllowInsecureTls.set($event)"
+            />
+            <span class="switch-track"></span>
+            <span class="switch-label text-xs">允许自签名 HTTPS 证书（仅限局域网 / Tailscale / 内网反代）</span>
+          </label>
+        </div>
 
         @if (nodeProbeResult(); as probe) {
           <div class="probe-banner mb-3" [class.ok]="probe.reachable" [class.fail]="!probe.reachable">
             @if (probe.reachable) {
-              <div class="font-semibold text-xs">
-                连通成功 · 延迟 {{ probe.latencyMs }} ms · {{ probe.workspaceCount }} 工作区 / {{ probe.terminalCount }} 终端
+              <div class="font-semibold text-xs flex items-center gap-1.5">
+                <fleet-icon name="check" [size]="13" />
+                <span>连通成功 · 延迟 {{ probe.latencyMs }} ms · {{ probe.workspaceCount }} 工作区 / {{ probe.terminalCount }} 终端</span>
               </div>
-              <div class="flex flex-wrap gap-1.5 mt-1">
+              <div class="flex flex-wrap gap-1.5 mt-1.5">
                 <span class="mini-chip" [class.st-completed]="probe.supportsAccountRouting">
                   账号路由：{{ probe.supportsAccountRouting ? '支持' : '兼容降级' }}
                 </span>
@@ -1482,14 +2233,19 @@
           </div>
         }
 
-        <div class="flex justify-between items-center gap-2">
+        @if (nodeConnectError()) {
+          <div class="probe-banner fail mb-3" role="alert">连接失败：{{ nodeConnectError() }}</div>
+        }
+
+        <div class="modal-footer">
           <button
             type="button"
             class="btn btn-sm btn-outline"
             [disabled]="nodeProbing()"
             (click)="testNodeConnection()"
           >
-            {{ nodeProbing() ? '探测中...' : '测试连通性' }}
+            <fleet-icon name="activity" [size]="13" [class.spin]="nodeProbing()" />
+            <span>{{ nodeProbing() ? '探测中...' : '测试连通性' }}</span>
           </button>
           <div class="flex gap-2">
             <button type="button" class="btn btn-sm btn-ghost" (click)="nodeModalOpen.set(false)">取消</button>
@@ -1507,64 +2263,151 @@
     </div>
   }
 
+  <!-- ==================== MODAL: REVERSE MCP CONFIG ==================== -->
   @if (mcpDrawerOpen()) {
-    <div class="modal-backdrop" (click)="mcpDrawerOpen.set(false)">
+    <div class="fleet-modal-backdrop" (click)="mcpDrawerOpen.set(false)">
       <div class="modal-panel" (click)="$event.stopPropagation()">
         <div class="modal-head">
           <div>
-            <h2>反向 MCP 配置（解锁自动子 Agent 与 Planner）</h2>
-            <p>复制下方 JSON 到 Termexo「设置 → MCP Profile」新建名为 Termexo Fleet 的配置即可。</p>
+            <h2>反向 MCP 接入配置</h2>
+            <p>在 Termexo 打开「设置 → MCP Profile」，新建名为 Termexo Fleet 的配置并粘贴 JSON，解锁自动子 Agent 与 Planner DAG。</p>
           </div>
-          <button type="button" class="btn btn-xs btn-ghost" (click)="mcpDrawerOpen.set(false)">关闭</button>
+          <button type="button" class="icon-ghost-btn" (click)="mcpDrawerOpen.set(false)" aria-label="关闭弹窗">
+            <fleet-icon name="close" [size]="15" />
+          </button>
         </div>
-        <pre class="mcp-code mb-3">{{ backend.buildTermexoMcpProfileSnippet() }}</pre>
-        <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-sm btn-primary gap-1.5" (click)="copyFleetMcpConfig()">
-            <fleet-icon name="copy" [size]="14" />
-            <span>一键复制 JSON</span>
+
+        <div class="mode-switch mb-3">
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="!mcpRemote()"
+            (click)="mcpRemote.set(false)"
+          >
+            本机节点
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="mcpRemote()"
+            (click)="mcpRemote.set(true)"
+          >
+            远程节点 (HTTPS)
+          </button>
+        </div>
+
+        @if (mcpRemote()) {
+          <p class="mcp-remote-hint mb-3">
+            将远程节点可访问的 HTTPS 地址反向代理到 Fleet 本机 MCP 地址，并透传 <code>Authorization</code> 请求头。
+          </p>
+          <label class="adv-field mb-3">
+            <span>远程反向 MCP 地址</span>
+            <input
+              type="url"
+              class="input input-sm font-mono w-full"
+              placeholder="https://fleet.example.net/mcp"
+              [ngModel]="mcpRemoteUrl()"
+              (ngModelChange)="mcpRemoteUrl.set($event)"
+            />
+          </label>
+          @if (mcpRemoteError()) {
+            <div class="probe-banner fail mb-3" role="alert">{{ mcpRemoteError() }}</div>
+          }
+        }
+
+        @if (!mcpRemote() || backend.overview().mcpRemoteUrl) {
+          <pre class="mcp-code mb-4">{{ backend.buildTermexoMcpProfileSnippet(mcpRemote()) }}</pre>
+        }
+
+        <div class="modal-footer justify-end">
+          @if (mcpRemote()) {
+            <button
+              type="button"
+              class="btn btn-sm btn-outline"
+              [disabled]="mcpRemoteSaving() || mcpRemoteUrl().trim() === (backend.overview().mcpRemoteUrl ?? '')"
+              (click)="saveMcpRemoteUrl()"
+            >
+              {{ mcpRemoteSaving() ? '保存中...' : '保存地址' }}
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            [disabled]="mcpRemote() && (!backend.overview().mcpRemoteUrl || mcpRemoteUrl().trim() !== backend.overview().mcpRemoteUrl)"
+            (click)="copyFleetMcpConfig(mcpRemote())"
+          >
+            <fleet-icon [name]="isCopied(mcpRemote() ? 'mcp-remote' : 'mcp-local') ? 'check' : 'copy'" [size]="13" />
+            <span>{{ isCopied(mcpRemote() ? 'mcp-remote' : 'mcp-local') ? '已复制到剪贴板' : '一键复制 JSON' }}</span>
           </button>
         </div>
       </div>
     </div>
   }
 
+  <!-- ==================== SLIDE-OVER LIVE TERMINAL DRAWER ==================== -->
   @if (terminalDrawer(); as drawer) {
-    <div class="drawer-backdrop" (click)="terminalDrawer.set(null)">
+    <div class="drawer-backdrop" (click)="closeTerminalDrawer()">
       <aside class="terminal-drawer" (click)="$event.stopPropagation()">
         <div class="drawer-head">
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 mb-1">
+            <div class="drawer-meta-row">
               <span class="mac-dots" aria-hidden="true">
                 <i class="d-red"></i><i class="d-yellow"></i><i class="d-green"></i>
               </span>
               <span class="status-chip" [class]="'status-chip st-' + drawer.status">
                 {{ statusLabel(drawer.status) }}
               </span>
-              <span class="mini-chip">{{ drawer.nodeId }}</span>
+              <span class="mini-chip">
+                <fleet-icon name="server" [size]="10" />
+                {{ drawer.nodeId }}
+              </span>
               <span class="mini-chip">{{ drawer.model }}</span>
               @if (drawer.branch) {
-                <span class="mini-chip branch">{{ drawer.branch }}</span>
+                <span class="mini-chip branch">
+                  <fleet-icon name="git-branch" [size]="10" />
+                  {{ drawer.branch }}
+                </span>
               }
             </div>
             <h2 class="drawer-title">{{ drawer.title }}</h2>
           </div>
-          <div class="flex items-center gap-1.5 shrink-0">
+
+          <div class="drawer-head-actions">
             <button
               type="button"
-              class="btn btn-xs btn-ghost gap-1"
+              class="btn btn-xs"
+              [class.btn-primary]="drawerAutoRefresh()"
+              [class.btn-outline]="!drawerAutoRefresh()"
+              (click)="toggleDrawerAutoRefresh()"
+              title="开启或关闭每 3 秒自动拉取终端输出"
+            >
+              <span class="pulse-dot tiny" [class.green]="!drawerAutoRefresh()" [class.dark-dot]="drawerAutoRefresh()"></span>
+              <span>{{ drawerAutoRefresh() ? '自动刷新中' : '自动 3s' }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost"
+              (click)="copyTerminalOutput()"
+              title="复制终端内容"
+            >
+              <fleet-icon [name]="isCopied('terminal-out') ? 'check' : 'copy'" [size]="12" />
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost"
               [disabled]="drawer.loading"
               (click)="refreshTerminalDrawer()"
+              title="立即刷新终端输出"
             >
-              <fleet-icon name="refresh" [size]="12" />
-              <span>{{ drawer.loading ? '刷新中' : '刷新' }}</span>
+              <fleet-icon name="refresh" [size]="12" [class.spin]="drawer.loading" />
             </button>
-            <button type="button" class="btn btn-xs btn-ghost" (click)="terminalDrawer.set(null)">
+            <button type="button" class="icon-ghost-btn" (click)="closeTerminalDrawer()" aria-label="关闭终端抽屉">
               <fleet-icon name="close" [size]="14" />
             </button>
           </div>
         </div>
 
-        <pre class="terminal-output">{{ drawer.text }}</pre>
+        <pre #terminalOutputEl class="terminal-output">{{ drawer.text }}</pre>
 
         <div class="drawer-reply-bar">
           <div class="quick-reply-row">
@@ -1574,16 +2417,17 @@
               </button>
             }
           </div>
-          <div class="flex gap-2 mt-2">
+          <div class="drawer-input-row">
+            <span class="term-prompt-glyph" aria-hidden="true">$</span>
             <input
               type="text"
-              class="input input-bordered input-sm flex-1 font-mono text-xs"
+              class="drawer-term-input"
               placeholder="直接向此 Termexo 真实终端发送指令并回车..."
               [ngModel]="drawerReplyDraft()"
               (ngModelChange)="drawerReplyDraft.set($event)"
               (keydown.enter)="sendDrawerReply()"
             />
-            <button type="button" class="btn btn-sm btn-primary gap-1" (click)="sendDrawerReply()">
+            <button type="button" class="btn btn-sm btn-primary" (click)="sendDrawerReply()">
               <fleet-icon name="send" [size]="12" />
               <span>发送</span>
             </button>
@@ -1593,24 +2437,34 @@
     </div>
   }
 
+  <!-- ==================== GLOBAL COMMAND PALETTE (CTRL+K) ==================== -->
   @if (commandPaletteOpen()) {
-    <div class="modal-backdrop" (click)="commandPaletteOpen.set(false)">
+    <div class="fleet-modal-backdrop palette-backdrop" (click)="commandPaletteOpen.set(false)">
       <div class="cmd-palette" (click)="$event.stopPropagation()">
         <div class="cmd-search-row">
           <fleet-icon name="search" [size]="16" />
           <input
+            #cmdSearchInput
             type="text"
             class="cmd-search-input"
-            placeholder="搜索视图或快捷指令（如：节点、账本、复制、同步）..."
-            autofocus
+            placeholder="搜索视图、实时终端或快捷指令（如：节点、账本、终端、同步）..."
             [ngModel]="commandQuery()"
-            (ngModelChange)="commandQuery.set($event)"
+            (ngModelChange)="updateCommandQuery($event)"
+            (keydown)="handlePaletteKeydown($event)"
           />
           <kbd class="kbd-chip">ESC</kbd>
         </div>
-        <div class="cmd-list">
-          @for (item of filteredCommands(); track item.id) {
-            <button type="button" class="cmd-item" (click)="runCommandAction(item)">
+        <div class="cmd-list" role="listbox">
+          @for (item of filteredCommands(); track item.id; let i = $index) {
+            <button
+              type="button"
+              role="option"
+              class="cmd-item"
+              [class.selected]="i === commandSelectedIndex()"
+              [attr.aria-selected]="i === commandSelectedIndex()"
+              (mouseenter)="commandSelectedIndex.set(i)"
+              (click)="runCommandAction(item)"
+            >
               <span class="cmd-item-icon">
                 <fleet-icon [name]="item.icon" [size]="15" />
               </span>
@@ -1618,22 +2472,31 @@
                 <span class="cmd-item-title">{{ item.title }}</span>
                 <span class="cmd-item-hint">{{ item.hint }}</span>
               </span>
+              @if (item.shortcut) {
+                <kbd class="kbd-chip">{{ item.shortcut }}</kbd>
+              }
               <span class="cmd-item-group">{{ item.group }}</span>
             </button>
           } @empty {
             <div class="panel-empty m-3">未找到匹配的快捷指令</div>
           }
         </div>
+        <div class="cmd-footer">
+          <span><kbd class="kbd-chip">↑↓</kbd> 选择</span>
+          <span><kbd class="kbd-chip">↵</kbd> 执行</span>
+          <span><kbd class="kbd-chip">Alt 1-6</kbd> 直达视图</span>
+        </div>
       </div>
     </div>
   }
 
-  @if (toast(); as message) {
-    <div class="floating-toast" role="status">
+  <!-- ==================== FLOATING GLASS TOAST ==================== -->
+  @if (toast(); as t) {
+    <div class="floating-toast" [class]="'floating-toast tone-' + t.tone" role="status">
       <span class="toast-icon">
-        <fleet-icon name="check" [size]="13" />
+        <fleet-icon [name]="t.tone === 'error' ? 'alert' : t.tone === 'info' ? 'sparkles' : 'check'" [size]="13" />
       </span>
-      <span class="toast-text">{{ message }}</span>
+      <span class="toast-text">{{ t.text }}</span>
       <button type="button" class="toast-close" (click)="toast.set(null)" aria-label="关闭通知">
         <fleet-icon name="close" [size]="12" />
       </button>

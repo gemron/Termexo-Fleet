@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fleet_connector::{
-    classify_terminal_output, CreateTermexoTaskRequest, TermexoMcpClient, TerminalSignal,
+    classify_terminal_output, CreateTermexoTaskRequest, TermexoMcpClient, TermexoTaskBoardSnapshot,
+    TermexoTaskRecord, TerminalSignal,
 };
 use fleet_mcp_server::{BoxFuture, FleetMcpHandler, RunningMcpServer};
 use fleet_orchestrator::{
@@ -17,20 +18,22 @@ use fleet_protocol::{
     ExecutionMode, ExecutionRecord, FleetAnalytics, FleetNode, GuardrailPolicy, Mission,
     MissionStatus, MissionTask, NodeLiveSnapshot, NodeProbeResult, NodeStatus,
     NotificationSettings, PlannedDagStep, RoutingMode, SlotHealth, TaskRole, TaskStatus,
-    TermexoSettingsSnapshot, TransportType, WorkflowTemplate,
+    TermexoSettingsSnapshot, TermexoTerminalSummary, TermexoWorkspaceSummary, TransportType,
+    WorkflowTemplate,
 };
 use fleet_router::{
     evaluate_difficulty, infer_model_family, select_slot_across_fleet, RouteRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::storage::{delete_secret, load_secret, save_secret, FleetDatabase};
 
 const DEFAULT_FLEET_MCP_PORT: u16 = 7425;
 const RATE_LIMIT_COOLDOWN_MS: i64 = 5 * 60 * 1000;
 const FLEET_MCP_TOKEN_KEY: &str = "fleet-mcp-server-token";
+const FLEET_MCP_REMOTE_URL_KEY: &str = "fleet_mcp_remote_url";
 const NOTIFICATION_SETTINGS_KEY: &str = "notification_settings";
 
 pub fn now_ms() -> i64 {
@@ -53,6 +56,7 @@ pub struct FleetStateOverview {
     pub analytics: FleetAnalytics,
     pub notification_settings: NotificationSettings,
     pub mcp_server_url: String,
+    pub mcp_remote_url: Option<String>,
     pub mcp_server_token: String,
 }
 
@@ -96,6 +100,7 @@ pub struct CreateMissionInput {
 
 pub struct FleetRuntime {
     pub db: Arc<FleetDatabase>,
+    operations: Mutex<()>,
     snapshots: RwLock<HashMap<String, NodeLiveSnapshot>>,
     attention: RwLock<Vec<AttentionItem>>,
     token_cache: RwLock<HashMap<String, String>>,
@@ -116,6 +121,7 @@ impl FleetRuntime {
         };
         Ok(Arc::new(Self {
             db,
+            operations: Mutex::new(()),
             snapshots: RwLock::new(HashMap::new()),
             attention: RwLock::new(Vec::new()),
             token_cache: RwLock::new(HashMap::new()),
@@ -152,8 +158,19 @@ impl FleetRuntime {
             analytics,
             notification_settings,
             mcp_server_url: self.mcp_url.read().await.clone(),
+            mcp_remote_url: self
+                .db
+                .read_setting(FLEET_MCP_REMOTE_URL_KEY)?
+                .filter(|url| !url.is_empty()),
             mcp_server_token: self.mcp_token.clone(),
         })
+    }
+
+    pub fn save_mcp_remote_url(&self, input: &str) -> Result<Option<String>, String> {
+        let url = validate_remote_mcp_url(input)?;
+        self.db
+            .write_setting(FLEET_MCP_REMOTE_URL_KEY, url.as_deref().unwrap_or_default())?;
+        Ok(url)
     }
 
     pub async fn probe_node(
@@ -264,6 +281,7 @@ impl FleetRuntime {
     }
 
     pub async fn upsert_node(&self, input: UpsertNodeInput) -> Result<FleetNode, String> {
+        let _operation = self.operations.lock().await;
         let id = input
             .id
             .filter(|v| !v.trim().is_empty())
@@ -271,14 +289,6 @@ impl FleetRuntime {
         let endpoint = input.endpoint.trim().to_owned();
         if endpoint.is_empty() {
             return Err("Node MCP endpoint is required".into());
-        }
-        if let Some(token) = input.token.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-            let key = node_token_key(&id);
-            let _ = save_secret(&key, token);
-            self.token_cache
-                .write()
-                .await
-                .insert(id.clone(), token.to_owned());
         }
         let node = FleetNode {
             id: id.clone(),
@@ -296,11 +306,35 @@ impl FleetRuntime {
             last_heartbeat_ms: None,
             last_error: None,
         };
-        self.db.save_node(&node)?;
-        self.sync_node(&id).await.or(Ok(node))
+        let token = input
+            .token
+            .as_deref()
+            .map(str::trim)
+            .filter(|token| !token.is_empty());
+        let client = if let Some(token) = token {
+            TermexoMcpClient::new_with_options(&node.endpoint, token, node.allow_insecure_tls)
+                .map_err(|error| error.to_string())?
+        } else {
+            self.client_for_node(&node).await?
+        };
+        let workspaces = client
+            .workspace_list()
+            .await
+            .map_err(|error| error.to_string())?;
+        if let Some(token) = token {
+            save_secret(&node_token_key(&id), token)?;
+            self.token_cache.write().await.insert(id, token.to_owned());
+        }
+        self.sync_connected_node(node, &client, workspaces).await
     }
 
     pub async fn remove_node(&self, node_id: &str) -> Result<(), String> {
+        let _operation = self.operations.lock().await;
+        if self.db.list_tasks()?.iter().any(|task| {
+            task.assigned_node_id.as_deref() == Some(node_id) && task.status.is_active()
+        }) {
+            return Err("Stop the active tasks on this node before removing it".into());
+        }
         let _ = delete_secret(&node_token_key(node_id));
         self.token_cache.write().await.remove(node_id);
         self.snapshots.write().await.remove(node_id);
@@ -308,6 +342,11 @@ impl FleetRuntime {
     }
 
     pub async fn sync_node(&self, node_id: &str) -> Result<FleetNode, String> {
+        let _operation = self.operations.lock().await;
+        self.sync_node_locked(node_id).await
+    }
+
+    async fn sync_node_locked(&self, node_id: &str) -> Result<FleetNode, String> {
         let mut node = self
             .db
             .list_nodes()?
@@ -334,6 +373,15 @@ impl FleetRuntime {
                 return Err(error.to_string());
             }
         };
+        self.sync_connected_node(node, &client, workspaces).await
+    }
+
+    async fn sync_connected_node(
+        &self,
+        mut node: FleetNode,
+        client: &TermexoMcpClient,
+        workspaces: Vec<TermexoWorkspaceSummary>,
+    ) -> Result<FleetNode, String> {
         let terminals = client.terminal_list(None).await.unwrap_or_default();
         let settings = client.settings_get().await.unwrap_or_default();
         let now = now_ms();
@@ -344,7 +392,8 @@ impl FleetRuntime {
         self.db.save_node(&node)?;
 
         self.sync_slots_from_settings(&node.id, &settings)?;
-        self.sync_running_tasks(&node, &client, &terminals).await?;
+        self.sync_running_tasks(&node, client, &workspaces, &terminals)
+            .await?;
 
         let snapshot = NodeLiveSnapshot {
             node_id: node.id.clone(),
@@ -375,11 +424,22 @@ impl FleetRuntime {
     }
 
     pub async fn save_slot(&self, slot: AccountModelSlot) -> Result<AccountModelSlot, String> {
+        let _operation = self.operations.lock().await;
+        let mut slot = slot;
+        if let Some(current) = self
+            .db
+            .list_slots()?
+            .into_iter()
+            .find(|item| item.id == slot.id)
+        {
+            slot.active_count = current.active_count;
+        }
         self.db.save_slot(&slot)?;
         Ok(slot)
     }
 
     pub async fn reset_slot_health(&self, slot_id: &str) -> Result<AccountModelSlot, String> {
+        let _operation = self.operations.lock().await;
         let mut slot = self
             .db
             .list_slots()?
@@ -393,6 +453,14 @@ impl FleetRuntime {
     }
 
     pub async fn create_mission(&self, input: CreateMissionInput) -> Result<(Mission, MissionTask), String> {
+        let _operation = self.operations.lock().await;
+        if input.workflow_template == WorkflowTemplate::PlannerDag
+            && input.execution_mode == ExecutionMode::Terminal
+        {
+            return Err(
+                "Planner DAG requires task-board execution to attach the Fleet MCP profile".into(),
+            );
+        }
         let now = now_ms();
         let mission_id = format!("m-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         let (base_difficulty, auto_difficulty) = match input.difficulty {
@@ -408,6 +476,18 @@ impl FleetRuntime {
             goal_prompt: input.goal_prompt.trim().to_owned(),
             node_id: input.node_id.clone(),
             workspace_id: input.workspace_id.clone(),
+            workspace_name: self
+                .snapshots
+                .read()
+                .await
+                .get(&input.node_id)
+                .and_then(|snapshot| {
+                    snapshot
+                        .workspaces
+                        .iter()
+                        .find(|workspace| workspace.id == input.workspace_id)
+                })
+                .map(|workspace| workspace.name.clone()),
             project_id: input.project_id.clone(),
             routing_mode: input.routing_mode,
             workflow_template: input.workflow_template,
@@ -418,7 +498,6 @@ impl FleetRuntime {
             created_at_ms: now,
             updated_at_ms: now,
         };
-        self.db.save_mission(&mission)?;
 
         let created_tasks = match input.workflow_template {
             WorkflowTemplate::Direct => vec![new_mission_task(
@@ -518,13 +597,11 @@ impl FleetRuntime {
         };
 
         validate_dag_acyclic(&created_tasks).map_err(|e| e.to_string())?;
-        for task in &created_tasks {
-            self.db.save_task(task)?;
-        }
+        self.db.save_mission_tasks(&mission, &created_tasks)?;
 
         let entry_task_id = created_tasks[0].id.clone();
         if input.auto_dispatch {
-            let dispatched = self.dispatch_task(&entry_task_id).await?;
+            let dispatched = self.dispatch_task_locked(&entry_task_id).await?;
             let updated_mission = self
                 .db
                 .list_missions()?
@@ -540,201 +617,391 @@ impl FleetRuntime {
     /// Advances all ready (`Pending` with all `depends_on` completed) DAG tasks in a mission,
     /// and reconciles overall mission completion state.
     pub async fn advance_mission_dag(&self, mission_id: &str) -> Result<Vec<String>, String> {
+        let _operation = self.operations.lock().await;
+        self.advance_mission_dag_locked(mission_id).await
+    }
+
+    async fn advance_mission_dag_locked(&self, mission_id: &str) -> Result<Vec<String>, String> {
+        let tasks = self.mission_tasks(mission_id)?;
+        let mut dispatched = Vec::new();
+        for id in find_ready_dag_tasks(&tasks) {
+            if self.dispatch_task_locked(&id).await.is_ok() {
+                dispatched.push(id);
+            }
+        }
+        self.reconcile_mission(mission_id).await?;
+        Ok(dispatched)
+    }
+
+    fn mission_tasks(&self, mission_id: &str) -> Result<Vec<MissionTask>, String> {
+        Ok(self
+            .db
+            .list_tasks()?
+            .into_iter()
+            .filter(|task| task.mission_id == mission_id)
+            .collect())
+    }
+
+    async fn reconcile_mission(&self, mission_id: &str) -> Result<(), String> {
         let mut mission = self
             .db
             .list_missions()?
             .into_iter()
-            .find(|m| m.id == mission_id)
+            .find(|mission| mission.id == mission_id)
             .ok_or_else(|| format!("Mission not found: {mission_id}"))?;
-        let mission_tasks: Vec<MissionTask> = self
-            .db
-            .list_tasks()?
-            .into_iter()
-            .filter(|t| t.mission_id == mission_id)
+        let mut tasks = self.mission_tasks(mission_id)?;
+        if tasks.is_empty() {
+            return Ok(());
+        }
+
+        let mut blocked: HashSet<String> = tasks
+            .iter()
+            .filter(|task| matches!(task.status, TaskStatus::Failed | TaskStatus::Cancelled))
+            .map(|task| task.id.clone())
             .collect();
-        let ready_ids = find_ready_dag_tasks(&mission_tasks);
-        let mut dispatched = Vec::new();
-        for id in ready_ids {
-            if self.dispatch_task(&id).await.is_ok() {
-                dispatched.push(id);
+        loop {
+            let previous = blocked.len();
+            for task in &tasks {
+                if task.status == TaskStatus::Pending
+                    && task.depends_on.iter().any(|id| blocked.contains(id))
+                {
+                    blocked.insert(task.id.clone());
+                }
+            }
+            if blocked.len() == previous {
+                break;
             }
         }
 
-        // Recompute mission status after attempting ready dispatches.
-        let refreshed: Vec<MissionTask> = self
-            .db
-            .list_tasks()?
-            .into_iter()
-            .filter(|t| t.mission_id == mission_id)
-            .collect();
-        let prev_status = mission.status;
-        if !refreshed.is_empty()
-            && refreshed
+        let mut changed_tasks = Vec::new();
+        for task in &mut tasks {
+            if task.status != TaskStatus::Pending {
+                continue;
+            }
+            let error = task
+                .depends_on
                 .iter()
-                .all(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Cancelled))
+                .find(|id| blocked.contains(*id))
+                .map(|id| format!("Blocked by upstream task: {id}"));
+            let had_blocker = task
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.starts_with("Blocked by upstream task:"));
+            if (error.is_some() || had_blocker) && error != task.last_error {
+                task.last_error = error;
+                task.updated_at_ms = now_ms();
+                changed_tasks.push(task.clone());
+            }
+        }
+
+        let previous_status = mission.status.clone();
+        if tasks
+            .iter()
+            .all(|task| task.status == TaskStatus::Completed)
         {
             mission.status = MissionStatus::Completed;
-            mission.updated_at_ms = now_ms();
-            self.db.save_mission(&mission)?;
-            if prev_status != MissionStatus::Completed {
-                self.dispatch_notification(
-                    "completed",
-                    &format!("任务完成：{}", mission.title),
-                    &format!(
-                        "Mission {} 共 {} 个子任务已全部完成。",
-                        mission.id,
-                        refreshed.len()
-                    ),
-                    Some(&mission.node_id),
-                    Some(&mission.workspace_id),
-                    None,
-                )
-                .await;
-            }
-        } else if refreshed
-            .iter()
-            .any(|t| t.status == TaskStatus::Failed && t.retry_count >= t.max_retries)
-            && !refreshed.iter().any(|t| {
-                matches!(
-                    t.status,
-                    TaskStatus::Running | TaskStatus::WaitingInput | TaskStatus::WaitingApproval
-                )
-            })
-        {
-            mission.status = MissionStatus::Failed;
-            mission.updated_at_ms = now_ms();
-            self.db.save_mission(&mission)?;
-            if prev_status != MissionStatus::Failed {
-                self.dispatch_notification(
-                    "failed",
-                    &format!("任务失败：{}", mission.title),
-                    &format!(
-                        "Mission {} 存在超出重试上限的失败节点，请检查终端日志。",
-                        mission.id
-                    ),
-                    Some(&mission.node_id),
-                    Some(&mission.workspace_id),
-                    None,
-                )
-                .await;
+        } else if !tasks.iter().any(|task| {
+            task.status.is_active()
+                || (task.status == TaskStatus::Pending && !blocked.contains(&task.id))
+        }) {
+            if tasks.iter().any(|task| task.status == TaskStatus::Failed) {
+                mission.status = MissionStatus::Failed;
+            } else if tasks
+                .iter()
+                .any(|task| task.status == TaskStatus::Cancelled)
+            {
+                mission.status = MissionStatus::Cancelled;
             }
         }
 
-        Ok(dispatched)
+        if mission.status == previous_status {
+            return self.db.save_task_changes(&changed_tasks, None, None);
+        }
+        mission.updated_at_ms = now_ms();
+        self.db
+            .save_task_changes(&changed_tasks, Some(&mission), None)?;
+        let event = match mission.status {
+            MissionStatus::Completed => ("completed", "任务完成", "所有阶段已完成。"),
+            MissionStatus::Failed => ("failed", "任务失败", "任务存在失败阶段，请检查终端日志。"),
+            _ => return Ok(()),
+        };
+        self.dispatch_notification(
+            event.0,
+            &format!("{}：{}", event.1, mission.title),
+            event.2,
+            Some(&mission.node_id),
+            Some(&mission.workspace_id),
+            None,
+        )
+        .await;
+        Ok(())
     }
 
-    /// Retries a failed or stopped task, incrementing `retry_count` and automatically escalating
-    /// difficulty (`L1 -> L2 -> L3`) on repeated failure.
     pub async fn retry_task_with_escalation(&self, task_id: &str) -> Result<MissionTask, String> {
-        let mut task = self
-            .db
-            .list_tasks()?
-            .into_iter()
-            .find(|t| t.id == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+        let _operation = self.operations.lock().await;
+        let mut task = self.task_by_id(task_id)?;
+        if !matches!(task.status, TaskStatus::Failed | TaskStatus::Cancelled) {
+            return Err("Only failed or cancelled tasks can be retried".into());
+        }
+        self.queue_retry(&mut task)?;
+        self.dispatch_task_locked(task_id).await
+    }
+
+    fn queue_retry(&self, task: &mut MissionTask) -> Result<(), String> {
         task.retry_count = task.retry_count.saturating_add(1);
-        if task.retry_count >= 1 && task.difficulty != DifficultyTier::L4 {
+        if !task.auto_difficulty && task.difficulty != DifficultyTier::L4 {
             task.difficulty = task.difficulty.escalate();
         }
         task.status = TaskStatus::Pending;
+        task.termexo_task_id = None;
+        task.termexo_terminal_id = None;
+        task.terminal_stop_requested = false;
+        task.terminal_start_sequence = None;
+        task.terminal_initial_status = None;
+        task.provider_failure = None;
+        task.result_summary = None;
+        task.diff_stat = None;
         task.last_error = None;
         task.updated_at_ms = now_ms();
-        self.db.save_task(&task)?;
-        self.dispatch_task(task_id).await
+        self.db.save_task(task)
+    }
+
+    fn task_by_id(&self, task_id: &str) -> Result<MissionTask, String> {
+        self.db
+            .list_tasks()?
+            .into_iter()
+            .find(|task| task.id == task_id)
+            .ok_or_else(|| format!("Task not found: {task_id}"))
+    }
+
+    fn task_slot(&self, task: &MissionTask) -> Result<Option<AccountModelSlot>, String> {
+        Ok(self
+            .db
+            .list_slots()?
+            .into_iter()
+            .find(|slot| Some(slot.id.as_str()) == task.assigned_slot_id.as_deref()))
+    }
+
+    async fn task_client(&self, task: &MissionTask) -> Result<TermexoMcpClient, String> {
+        let node = self
+            .db
+            .list_nodes()?
+            .into_iter()
+            .find(|node| Some(node.id.as_str()) == task.assigned_node_id.as_deref())
+            .ok_or("Assigned Termexo node is unavailable")?;
+        self.client_for_node(&node).await
     }
 
     pub async fn cancel_task(&self, task_id: &str) -> Result<MissionTask, String> {
-        let mut task = self
-            .db
-            .list_tasks()?
-            .into_iter()
-            .find(|t| t.id == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-        if let (Some(node_id), Some(termexo_task_id)) = (
-            task.assigned_node_id.as_deref(),
-            task.termexo_task_id.as_deref(),
-        ) {
-            if let Some(node) = self.db.list_nodes()?.into_iter().find(|n| n.id == node_id) {
-                if let Ok(client) = self.client_for_node(&node).await {
-                    let _ = client.task_stop(termexo_task_id).await;
+        let _operation = self.operations.lock().await;
+        let mut task = self.task_by_id(task_id)?;
+        match task.status {
+            TaskStatus::Cancelled => return Ok(task),
+            TaskStatus::Completed | TaskStatus::Failed => {
+                return Err("This task has already finished".into())
+            }
+            _ => {}
+        }
+
+        let was_active = task.status.is_active();
+        if was_active {
+            let client = self.task_client(&task).await?;
+            if let Some(remote_id) = &task.termexo_task_id {
+                let stopped = client
+                    .task_stop(remote_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !matches!(
+                    stopped.execution_state.as_str(),
+                    "stopped" | "failed" | "cancelled"
+                ) || stopped.id != *remote_id
+                {
+                    return Err("Termexo did not confirm that the task stopped".into());
                 }
+            } else if let Some(terminal_id) = &task.termexo_terminal_id {
+                if !task.terminal_stop_requested {
+                    client
+                        .terminal_write(terminal_id, "\u{3}", false)
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    task.terminal_stop_requested = true;
+                    task.updated_at_ms = now_ms();
+                    self.db.save_task(&task)?;
+                }
+                return Ok(task);
+            } else {
+                return Err("No remote task or terminal is available to stop".into());
             }
         }
-        if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-            if let Some(mut slot) = self.db.list_slots()?.into_iter().find(|s| s.id == slot_id) {
-                slot.active_count = slot.active_count.saturating_sub(1);
-                let _ = self.db.save_slot(&slot);
-            }
-        }
-        let was_active = matches!(
-            task.status,
-            TaskStatus::Running | TaskStatus::WaitingInput | TaskStatus::WaitingApproval
-        );
+
         task.status = TaskStatus::Cancelled;
         task.updated_at_ms = now_ms();
-        self.db.save_task(&task)?;
+        let mut slot = if was_active {
+            self.task_slot(&task)?
+        } else {
+            None
+        };
+        if let Some(slot) = &mut slot {
+            slot.active_count = slot.active_count.saturating_sub(1);
+        }
+        self.db
+            .save_task_changes(std::slice::from_ref(&task), None, slot.as_ref())?;
         if was_active {
             self.record_task_execution(&task, task.updated_at_ms);
         }
+        self.reconcile_mission(&task.mission_id).await?;
         Ok(task)
     }
 
     pub async fn dispatch_task(&self, task_id: &str) -> Result<MissionTask, String> {
-        let all_tasks = self.db.list_tasks()?;
-        let mut task = all_tasks
-            .iter()
-            .find(|t| t.id == task_id)
-            .cloned()
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+        let _operation = self.operations.lock().await;
+        self.dispatch_task_locked(task_id).await
+    }
+
+    async fn dispatch_task_locked(&self, task_id: &str) -> Result<MissionTask, String> {
+        let mut task = self.task_by_id(task_id)?;
+        if task.status != TaskStatus::Pending {
+            return Err("Only pending tasks can be dispatched".into());
+        }
         let mut mission = self
             .db
             .list_missions()?
             .into_iter()
-            .find(|m| m.id == task.mission_id)
+            .find(|item| item.id == task.mission_id)
             .ok_or_else(|| format!("Mission not found: {}", task.mission_id))?;
-        let mission_tasks: Vec<MissionTask> = all_tasks
-            .into_iter()
-            .filter(|t| t.mission_id == mission.id)
-            .collect();
+        let tasks = self.mission_tasks(&mission.id)?;
+        if !find_ready_dag_tasks(&tasks).contains(&task.id) {
+            return Err("Complete the upstream tasks before starting this stage".into());
+        }
+        if task.parent_task_id.is_some()
+            && tasks
+                .iter()
+                .filter(|item| item.parent_task_id.is_some() && item.status.is_active())
+                .count()
+                >= mission.guardrails.max_concurrency as usize
+        {
+            return Err("Mission sub-agent concurrency limit reached".into());
+        }
+        match self.start_task(&mut task, &mut mission, &tasks).await {
+            Ok(()) => Ok(task),
+            Err(error) => {
+                task.last_error = Some(error.clone());
+                task.updated_at_ms = now_ms();
+                self.db.save_task(&task)?;
+                Err(error)
+            }
+        }
+    }
 
-        // For L4 Reviewer tasks with upstream dependencies, automatically exclude upstream author's model family.
+    async fn start_task(
+        &self,
+        task: &mut MissionTask,
+        mission: &mut Mission,
+        tasks: &[MissionTask],
+    ) -> Result<(), String> {
         if (task.difficulty == DifficultyTier::L4 || task.role == TaskRole::Reviewer)
             && task.exclude_model_family.is_none()
         {
-            for dep_id in &task.depends_on {
-                if let Some(dep) = mission_tasks.iter().find(|t| &t.id == dep_id) {
-                    if let Some(agent) = dep.assigned_agent_type.as_ref() {
-                        task.exclude_model_family = Some(infer_model_family(
-                            agent,
-                            dep.assigned_model_name.as_deref().unwrap_or(""),
-                        ));
-                        break;
-                    }
-                }
-            }
+            task.exclude_model_family = task.depends_on.iter().find_map(|id| {
+                let dep = tasks.iter().find(|item| &item.id == id)?;
+                let agent = dep.assigned_agent_type.as_ref()?;
+                Some(infer_model_family(
+                    agent,
+                    dep.assigned_model_name.as_deref().unwrap_or(""),
+                ))
+            });
+        }
+        if task.auto_difficulty {
+            task.difficulty = evaluate_difficulty(&task.title, &task.description, task.retry_count);
         }
 
-        let nodes = self.db.list_nodes()?;
+        let mut nodes = self.db.list_nodes()?;
         let mut slots = self.db.list_slots()?;
-        let now = now_ms();
-        let difficulty = if task.auto_difficulty {
-            evaluate_difficulty(&task.title, &task.description, task.retry_count)
+        let all_tasks = if task.execution_mode == ExecutionMode::Terminal {
+            self.db.list_tasks()?
         } else {
-            task.difficulty
+            Vec::new()
         };
-        task.difficulty = difficulty;
+        let mut workspaces = HashMap::new();
+        let resume_created = task.termexo_task_id.is_some() && task.assigned_workspace_id.is_some();
+        {
+            let snapshots = self.snapshots.read().await;
+            let origin = snapshots.get(&mission.node_id).and_then(|snapshot| {
+                snapshot
+                    .workspaces
+                    .iter()
+                    .find(|ws| ws.id == mission.workspace_id)
+            });
+            let worktree_node = task.worktree_path.as_ref().map(|_| {
+                if task.assigned_workspace_id.is_some() {
+                    task.assigned_node_id.as_deref().unwrap_or(&mission.node_id)
+                } else {
+                    &mission.node_id
+                }
+            });
+            nodes.retain(|node| {
+                if (task.isolate_worktree || task.worktree_path.is_some())
+                    && (node.transport_type != TransportType::Local
+                        || !is_loopback_endpoint(&node.endpoint))
+                    || worktree_node.is_some_and(|id| id != node.id)
+                    || resume_created && Some(node.id.as_str()) != task.assigned_node_id.as_deref()
+                {
+                    return false;
+                }
+                let Some(snapshot) = snapshots.get(&node.id) else {
+                    return false;
+                };
+                let workspace = if resume_created {
+                    snapshot
+                        .workspaces
+                        .iter()
+                        .find(|ws| Some(ws.id.as_str()) == task.assigned_workspace_id.as_deref())
+                } else {
+                    match_workspace(mission, origin, &node.id, &snapshot.workspaces)
+                };
+                let Some(workspace) = workspace else {
+                    return false;
+                };
+                workspaces.insert(node.id.clone(), workspace.clone());
+                if task.execution_mode == ExecutionMode::Terminal {
+                    slots.retain(|slot| {
+                        slot.node_id != node.id
+                            || snapshot.terminals.iter().any(|terminal| {
+                                terminal_matches_slot(
+                                    terminal,
+                                    slot,
+                                    &workspace.id,
+                                    task.preferred_terminal_id.as_deref(),
+                                ) && !terminal_in_use(terminal, &node.id, &all_tasks)
+                            })
+                    });
+                }
+                true
+            });
+        }
 
-        let effective_tags = if !task.required_node_tags.is_empty() {
-            task.required_node_tags.clone()
-        } else {
+        if nodes.is_empty() {
+            return Err(if task.isolate_worktree || task.worktree_path.is_some() {
+                "No local Termexo node can provide the requested workspace and Worktree isolation"
+                    .into()
+            } else {
+                "No Termexo node has a matching workspace. Check the workspace name on the target node.".into()
+            });
+        }
+
+        if resume_created {
+            slots.retain(|slot| Some(slot.id.as_str()) == task.assigned_slot_id.as_deref());
+        }
+        let effective_tags = if task.required_node_tags.is_empty() {
             mission.required_node_tags.clone()
+        } else {
+            task.required_node_tags.clone()
         };
-
         let decision = select_slot_across_fleet(
             &nodes,
             &slots,
             &RouteRequest {
-                difficulty,
+                difficulty: task.difficulty,
                 mode: mission.routing_mode,
                 preferred_node_id: task
                     .assigned_node_id
@@ -743,19 +1010,38 @@ impl FleetRuntime {
                 required_node_tags: effective_tags,
                 preferred_agent: task.preferred_agent.clone(),
                 exclude_model_family: task.exclude_model_family.clone(),
-                now_ms: now,
+                now_ms: now_ms(),
             },
         )
-        .map_err(|e| e.to_string())?;
-
+        .map_err(|error| {
+            if let Some(family) = &task.exclude_model_family {
+                format!("{error}; review requires a model family other than {family}")
+            } else {
+                error.to_string()
+            }
+        })?;
         let node = nodes
             .iter()
-            .find(|n| n.id == decision.node_id)
-            .ok_or_else(|| format!("Target Termexo node not found: {}", decision.node_id))?;
+            .find(|node| node.id == decision.node_id)
+            .ok_or("Assigned Termexo node is unavailable")?;
+        let workspace = workspaces
+            .get(&decision.node_id)
+            .ok_or("Assigned workspace is unavailable")?;
         let client = self.client_for_node(node).await?;
+        let slot = slots
+            .iter_mut()
+            .find(|slot| slot.id == decision.slot_id)
+            .ok_or("Assigned routing slot is unavailable")?;
 
-        let upstream_handoff = build_upstream_handoff(&task, &mission_tasks);
-        let enriched_description = build_fleet_task_description(
+        task.assigned_node_id = Some(decision.node_id);
+        task.assigned_workspace_id = Some(workspace.id.clone());
+        task.assigned_slot_id = Some(decision.slot_id);
+        task.assigned_agent_type = Some(decision.agent_type);
+        task.assigned_model_name = Some(decision.model_name);
+        task.assigned_account_profile_id = decision.account_profile_id;
+        task.routing_reason = Some(decision.reason);
+        let upstream = build_upstream_handoff(task, tasks);
+        let description = build_fleet_task_description(
             &task.description,
             &mission.id,
             &task.id,
@@ -763,111 +1049,209 @@ impl FleetRuntime {
             task.role,
             task.depth,
             mission.guardrails.max_depth,
-            upstream_handoff.as_deref(),
+            upstream.as_deref(),
         );
 
-        // Dual-track execution: Terminal track (existing live terminal) vs Task-board track.
         if task.execution_mode == ExecutionMode::Terminal {
-            let terminal_id = match task.preferred_terminal_id.clone() {
-                Some(id) if !id.trim().is_empty() => id,
-                _ => {
-                    let live = client
-                        .terminal_list(Some(&mission.workspace_id))
-                        .await
-                        .map_err(|e| e.to_string())?;
-                    live.into_iter()
-                        .find(|t| {
-                            t.live && t.agent_type.eq_ignore_ascii_case(decision.agent_type.as_str())
-                        })
-                        .map(|t| t.id)
-                        .ok_or("No matching live Termexo terminal found for Terminal-track execution")?
-                }
-            };
-            client
-                .terminal_write(&terminal_id, &enriched_description, true)
+            let live = client
+                .terminal_list(Some(&workspace.id))
                 .await
-                .map_err(|e| e.to_string())?;
-            task.termexo_terminal_id = Some(terminal_id);
+                .map_err(|error| error.to_string())?;
+            let terminal = live
+                .iter()
+                .find(|terminal| {
+                    terminal_matches_slot(
+                        terminal,
+                        slot,
+                        &workspace.id,
+                        task.preferred_terminal_id.as_deref(),
+                    ) && !terminal_in_use(terminal, &node.id, &all_tasks)
+                })
+                .ok_or(
+                    "No matching live Termexo terminal found for this account, model and workspace",
+                )?;
+            task.terminal_initial_status = Some(terminal.status.clone());
+            task.terminal_start_sequence = client
+                .terminal_read(&terminal.id, Some(1))
+                .await
+                .ok()
+                .map(|output| output.sequence);
+            client
+                .terminal_write(&terminal.id, &description, true)
+                .await
+                .map_err(|error| error.to_string())?;
+            task.termexo_terminal_id = Some(terminal.id.clone());
+            self.reserve_task(task, mission, slot, TaskStatus::Running)?;
+            return Ok(());
+        }
+
+        let remote_id = if resume_created {
+            task.termexo_task_id
+                .clone()
+                .ok_or("Missing queued remote task")?
         } else {
-            let workspace_id = self
-                .resolve_workspace_for_node(&decision.node_id, &mission.workspace_id)
-                .await;
-            let project_id = if decision.node_id == mission.node_id && !mission.project_id.trim().is_empty() {
-                mission.project_id.clone()
-            } else {
-                let board = client
-                    .task_list(&workspace_id)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                let first = board
+            let board = client
+                .task_list(&workspace.id)
+                .await
+                .map_err(|error| error.to_string())?;
+            let project = if node.id == mission.node_id && !mission.project_id.trim().is_empty() {
+                board
                     .projects
-                    .first()
-                    .ok_or("Target Termexo workspace has no task board project")?;
-                if decision.node_id == mission.node_id {
-                    mission.project_id = first.id.clone();
-                }
-                first.id.clone()
-            };
-
-            let mcp_profile_ids = if task.role == TaskRole::Planner || task.depth < mission.guardrails.max_depth {
-                mission.fleet_mcp_profile_id.clone().map(|id| vec![id])
+                    .iter()
+                    .find(|project| project.id == mission.project_id)
+                    .ok_or("The configured Termexo project is unavailable in this workspace")?
             } else {
-                None
+                let project = board
+                    .projects
+                    .iter()
+                    .find(|project| project.path == workspace.project_path)
+                    .or_else(|| (board.projects.len() == 1).then(|| &board.projects[0]))
+                    .ok_or("No unambiguous task-board project matches the target workspace")?;
+                if node.id == mission.node_id {
+                    mission.project_id = project.id.clone();
+                }
+                project
             };
 
+            let mcp_profile_ids = self.task_mcp_profile(mission, task, node).await?;
+            if task.role == TaskRole::Planner
+                && client.supports_task_mcp_profiles().await == Some(false)
+            {
+                return Err("This Termexo node cannot attach a task-level MCP profile".into());
+            }
+            if task.isolate_worktree && task.worktree_path.is_none() {
+                let repo = project.path.clone();
+                let id = task.id.clone();
+                let worktree = tokio::task::spawn_blocking(move || {
+                    create_isolated_worktree(Path::new(&repo), &id)
+                })
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| format!("Could not create the isolated Git worktree: {error}"))?;
+                task.worktree_path = Some(worktree.path);
+                task.worktree_branch = Some(worktree.branch);
+                self.db.save_task(task)?;
+            }
             let created = client
                 .task_create(&CreateTermexoTaskRequest {
-                    workspace_id,
-                    project_id,
+                    workspace_id: workspace.id.clone(),
+                    project_id: project.id.clone(),
                     title: task.title.clone(),
-                    agent_type: decision.agent_type.as_str().to_owned(),
-                    description: Some(enriched_description),
+                    agent_type: slot.agent_type.as_str().to_owned(),
+                    description: Some(description),
                     acceptance_criteria: (!task.acceptance_criteria.trim().is_empty())
                         .then(|| task.acceptance_criteria.clone()),
-                    priority: Some(match difficulty {
-                        DifficultyTier::L1 => "low".into(),
-                        DifficultyTier::L2 => "medium".into(),
-                        DifficultyTier::L3 | DifficultyTier::L4 => "high".into(),
-                    }),
-                    profile_id: decision.model_profile_id.clone(),
-                    account_profile_id: decision.account_profile_id.clone(),
+                    priority: Some(
+                        match task.difficulty {
+                            DifficultyTier::L1 => "low",
+                            DifficultyTier::L2 => "medium",
+                            DifficultyTier::L3 | DifficultyTier::L4 => "high",
+                        }
+                        .into(),
+                    ),
+                    profile_id: slot.model_profile_id.clone(),
+                    account_profile_id: slot.account_profile_id.clone(),
                     mcp_profile_ids,
-                    model_name: (!decision.model_name.trim().is_empty())
-                        .then(|| decision.model_name.clone()),
+                    model_name: (!slot.model_name.trim().is_empty())
+                        .then(|| slot.model_name.clone()),
                     working_directory: task.worktree_path.clone(),
                 })
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|error| error.to_string())?;
+            task.termexo_task_id = Some(created.id.clone());
+            created.id
+        };
 
-            let started = client
-                .task_execute(&created.id)
-                .await
-                .map_err(|e| e.to_string())?;
-            task.termexo_task_id = Some(started.id);
-            task.termexo_terminal_id = started.terminal_id;
-        }
-
-        task.assigned_node_id = Some(decision.node_id);
-        task.assigned_slot_id = Some(decision.slot_id.clone());
-        task.assigned_agent_type = Some(decision.agent_type);
-        task.assigned_model_name = Some(decision.model_name);
-        task.assigned_account_profile_id = decision.account_profile_id;
-        task.routing_reason = Some(decision.reason);
+        self.reserve_task(task, mission, slot, TaskStatus::Queued)?;
+        let started = client
+            .task_execute(&remote_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        task.termexo_terminal_id = started.terminal_id;
         task.status = TaskStatus::Running;
+        task.updated_at_ms = now_ms();
+        self.db.save_task(task)
+    }
+
+    fn reserve_task(
+        &self,
+        task: &mut MissionTask,
+        mission: &mut Mission,
+        slot: &mut AccountModelSlot,
+        status: TaskStatus,
+    ) -> Result<(), String> {
+        task.status = status;
         task.last_error = None;
         task.updated_at_ms = now_ms();
-        self.db.save_task(&task)?;
-
         mission.status = MissionStatus::Running;
         mission.updated_at_ms = task.updated_at_ms;
-        self.db.save_mission(&mission)?;
+        slot.active_count = slot.active_count.saturating_add(1);
+        self.db
+            .save_task_changes(std::slice::from_ref(task), Some(mission), Some(slot))
+    }
 
-        if let Some(slot) = slots.iter_mut().find(|s| s.id == decision.slot_id) {
-            slot.active_count = slot.active_count.saturating_add(1);
-            self.db.save_slot(slot)?;
+    async fn task_mcp_profile(
+        &self,
+        mission: &Mission,
+        task: &MissionTask,
+        node: &FleetNode,
+    ) -> Result<Option<Vec<String>>, String> {
+        let planner = task.role == TaskRole::Planner;
+        if !planner && task.depth >= mission.guardrails.max_depth {
+            return Ok(None);
         }
-
-        Ok(task)
+        if !matches!(
+            task.assigned_agent_type,
+            Some(AgentType::Claude | AgentType::Codex | AgentType::Opencode)
+        ) {
+            return if planner {
+                Err(
+                    "Planner requires Claude Code, Codex CLI, or OpenCode for task-level MCP"
+                        .into(),
+                )
+            } else {
+                Ok(None)
+            };
+        }
+        let snapshots = self.snapshots.read().await;
+        let selected_name = mission.fleet_mcp_profile_id.as_deref().and_then(|id| {
+            snapshots
+                .get(&mission.node_id)?
+                .settings
+                .mcp_profiles
+                .iter()
+                .find(|profile| profile.id == id)
+                .map(|profile| profile.name.as_str())
+        });
+        let profiles = &snapshots
+            .get(&node.id)
+            .ok_or("Node capabilities are unavailable")?
+            .settings
+            .mcp_profiles;
+        let profile = if node.id == mission.node_id {
+            mission
+                .fleet_mcp_profile_id
+                .as_deref()
+                .and_then(|id| profiles.iter().find(|profile| profile.id == id))
+        } else {
+            selected_name.and_then(|name| {
+                unique_match(profiles.iter().filter(|profile| profile.name == name))
+            })
+        };
+        let profile = profile.or_else(|| {
+            unique_match(
+                profiles
+                    .iter()
+                    .filter(|item| item.name.eq_ignore_ascii_case("Termexo Fleet")),
+            )
+        });
+        if planner && profile.is_none() {
+            return Err(format!(
+                "Configure a Termexo Fleet MCP profile on node '{}' before starting Planner",
+                node.name
+            ));
+        }
+        Ok(profile.map(|item| vec![item.id.clone()]))
     }
 
     pub async fn reply_terminal(
@@ -908,19 +1292,6 @@ impl FleetRuntime {
             .await
             .map_err(|e| e.to_string())?;
         Ok(snapshot.data)
-    }
-
-    async fn resolve_workspace_for_node(&self, node_id: &str, preferred_ws: &str) -> String {
-        let snaps = self.snapshots.read().await;
-        if let Some(snap) = snaps.get(node_id) {
-            if snap.workspaces.iter().any(|w| w.id == preferred_ws) {
-                return preferred_ws.to_owned();
-            }
-            if let Some(first) = snap.workspaces.first() {
-                return first.id.clone();
-            }
-        }
-        preferred_ws.to_owned()
     }
 
     async fn client_for_node(&self, node: &FleetNode) -> Result<TermexoMcpClient, String> {
@@ -1071,267 +1442,289 @@ impl FleetRuntime {
         &self,
         node: &FleetNode,
         client: &TermexoMcpClient,
-        terminals: &[fleet_protocol::TermexoTerminalSummary],
+        workspaces: &[TermexoWorkspaceSummary],
+        terminals: &[TermexoTerminalSummary],
     ) -> Result<(), String> {
-        let missions = self.db.list_missions()?;
-        let mission_map: HashMap<String, Mission> =
-            missions.into_iter().map(|m| (m.id.clone(), m)).collect();
+        let missions: HashMap<_, _> = self
+            .db
+            .list_missions()?
+            .into_iter()
+            .map(|mission| (mission.id.clone(), mission))
+            .collect();
         let mut tasks = self.db.list_tasks()?;
-        let mut slots = self.db.list_slots()?;
-        let mut new_attention = Vec::new();
-        let mut tasks_to_auto_retry = Vec::new();
+        let planned: HashSet<_> = tasks
+            .iter()
+            .filter_map(|task| task.parent_task_id.clone())
+            .collect();
         let now = now_ms();
+        let mut attention = Vec::new();
+        let mut boards = HashMap::new();
 
         for terminal in terminals {
-            let status_upper = terminal.status.to_ascii_uppercase();
-            if status_upper.contains("APPROVAL") || status_upper.contains("PERMISSION") {
-                new_attention.push(AttentionItem {
-                    id: format!("att-term-{}", terminal.id),
-                    node_id: node.id.clone(),
-                    node_name: node.name.clone(),
-                    workspace_id: Some(terminal.workspace_id.clone()),
-                    terminal_id: Some(terminal.id.clone()),
-                    mission_task_id: None,
-                    title: terminal.name.clone(),
-                    kind: AttentionKind::WaitingApproval,
-                    detail: format!(
-                        "{} ({}) is waiting for tool approval",
-                        terminal.agent_type, terminal.model
-                    ),
-                    detected_at_ms: now,
-                });
-            } else if status_upper.contains("WAITING") || status_upper.contains("INPUT") {
-                new_attention.push(AttentionItem {
-                    id: format!("att-term-{}", terminal.id),
-                    node_id: node.id.clone(),
-                    node_name: node.name.clone(),
-                    workspace_id: Some(terminal.workspace_id.clone()),
-                    terminal_id: Some(terminal.id.clone()),
-                    mission_task_id: None,
-                    title: terminal.name.clone(),
-                    kind: AttentionKind::WaitingInput,
-                    detail: format!(
-                        "{} ({}) is waiting for user input",
-                        terminal.agent_type, terminal.model
-                    ),
-                    detected_at_ms: now,
-                });
-            }
+            let kind = match terminal.status.as_str() {
+                "WAITING_APPROVAL" => AttentionKind::WaitingApproval,
+                "WAITING_INPUT" => AttentionKind::WaitingInput,
+                _ => continue,
+            };
+            attention.push(AttentionItem {
+                id: format!("att-term-{}", terminal.id),
+                node_id: node.id.clone(),
+                node_name: node.name.clone(),
+                workspace_id: Some(terminal.workspace_id.clone()),
+                terminal_id: Some(terminal.id.clone()),
+                mission_task_id: None,
+                title: terminal.name.clone(),
+                detail: format!("{} ({})", terminal.agent_type, terminal.model),
+                kind,
+                detected_at_ms: now,
+            });
         }
 
-        let mut boards_cache: HashMap<String, fleet_connector::TermexoTaskBoardSnapshot> =
-            HashMap::new();
         for task in &mut tasks {
-            if task.assigned_node_id.as_deref() != Some(node.id.as_str()) {
+            if task.assigned_node_id.as_deref() != Some(&node.id) || !task.status.is_active() {
                 continue;
             }
-            if matches!(
-                task.status,
-                TaskStatus::Completed
-                    | TaskStatus::Failed
-                    | TaskStatus::Cancelled
-                    | TaskStatus::Pending
-            ) {
-                continue;
-            }
-            let Some(mission) = mission_map.get(&task.mission_id) else {
+            let Some(mission) = missions.get(&task.mission_id) else {
                 continue;
             };
-            if !boards_cache.contains_key(&mission.workspace_id) {
-                if let Ok(board) = client.task_list(&mission.workspace_id).await {
-                    boards_cache.insert(mission.workspace_id.clone(), board);
+            let remote = if let Some(id) = &task.termexo_task_id {
+                find_remote_task(client, task, mission, workspaces, &mut boards, id).await
+            } else {
+                None
+            };
+            if task.execution_mode == ExecutionMode::Task && remote.is_none() {
+                continue;
+            }
+
+            let old_status = task.status.clone();
+            if let Some(remote) = &remote {
+                task.assigned_workspace_id = Some(remote.workspace_id.clone());
+                if remote.terminal_id.is_some() {
+                    task.termexo_terminal_id.clone_from(&remote.terminal_id);
+                }
+                task.status = match remote.execution_state.as_str() {
+                    "completed" => TaskStatus::Completed,
+                    "failed" => TaskStatus::Failed,
+                    "stopped" | "cancelled" if task.provider_failure.is_some() => {
+                        TaskStatus::Failed
+                    }
+                    "stopped" | "cancelled" => TaskStatus::Cancelled,
+                    "waiting" => TaskStatus::WaitingInput,
+                    "idle" if task.status == TaskStatus::Queued && remote.stage == "todo" => {
+                        TaskStatus::Pending
+                    }
+                    _ => TaskStatus::Running,
+                };
+                task.last_error = remote
+                    .last_error
+                    .clone()
+                    .or_else(|| task.provider_failure.clone());
+                if task.status == TaskStatus::Completed {
+                    task.result_summary.clone_from(&remote.output_tail);
                 }
             }
-            if let Some(board) = boards_cache.get(&mission.workspace_id) {
-                if let Some(termexo_task_id) = task.termexo_task_id.as_deref() {
-                    if let Some(remote) = board.tasks.iter().find(|t| t.id == termexo_task_id) {
-                        if let Some(tid) = &remote.terminal_id {
-                            task.termexo_terminal_id = Some(tid.clone());
-                        }
-                        let mut reached_terminal = false;
-                        match remote.execution_state.as_str() {
-                            "completed" => {
-                                task.status = TaskStatus::Completed;
-                                task.result_summary = remote.output_tail.clone();
-                                if let Some(wt) = task.worktree_path.as_deref() {
-                                    task.diff_stat = collect_worktree_diff_stat(Path::new(wt));
-                                }
-                                reached_terminal = true;
-                            }
-                            "failed" => {
-                                task.status = TaskStatus::Failed;
-                                task.last_error = remote.last_error.clone();
-                                reached_terminal = true;
-                                if task.retry_count < task.max_retries {
-                                    tasks_to_auto_retry.push(task.id.clone());
-                                }
-                            }
-                            "waiting" => {
-                                task.status = TaskStatus::WaitingInput;
-                            }
-                            _ => {
-                                task.status = TaskStatus::Running;
-                            }
-                        }
 
-                        if remote
-                            .last_terminal_status
-                            .as_deref()
-                            .is_some_and(|s| s.eq_ignore_ascii_case("RATE_LIMITED"))
-                        {
-                            if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-                                if let Some(slot) = slots.iter_mut().find(|s| s.id == slot_id) {
-                                    slot.health = SlotHealth::RateLimited;
-                                    slot.cooldown_until_ms = Some(now + RATE_LIMIT_COOLDOWN_MS);
-                                    let _ = self.db.save_slot(slot);
-                                }
-                            }
-                        }
+            let session = task
+                .termexo_terminal_id
+                .as_deref()
+                .and_then(|id| terminals.iter().find(|terminal| terminal.id == id));
+            let terminal_status = remote
+                .as_ref()
+                .and_then(|item| item.last_terminal_status.as_deref())
+                .or_else(|| session.map(|terminal| terminal.status.as_str()));
+            let output = if let Some(id) = &task.termexo_terminal_id {
+                client.terminal_read(id, Some(16_000)).await.ok()
+            } else {
+                None
+            };
 
-                        if let Some(tid) = task.termexo_terminal_id.as_deref() {
-                            if let Ok(read) = client.terminal_read(tid, Some(16_000)).await {
-                                match classify_terminal_output(&read.data) {
-                                    TerminalSignal::RateLimited => {
-                                        if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-                                            if let Some(slot) =
-                                                slots.iter_mut().find(|s| s.id == slot_id)
-                                            {
-                                                slot.health = SlotHealth::RateLimited;
-                                                slot.cooldown_until_ms =
-                                                    Some(now + RATE_LIMIT_COOLDOWN_MS);
-                                                let _ = self.db.save_slot(slot);
-                                            }
-                                        }
-                                        new_attention.push(AttentionItem {
-                                            id: format!("att-rl-{}", task.id),
-                                            node_id: node.id.clone(),
-                                            node_name: node.name.clone(),
-                                            workspace_id: Some(mission.workspace_id.clone()),
-                                            terminal_id: Some(tid.to_owned()),
-                                            mission_task_id: Some(task.id.clone()),
-                                            title: task.title.clone(),
-                                            kind: AttentionKind::RateLimited,
-                                            detail: "Rate limit detected; slot placed on 5m cooldown"
-                                                .into(),
-                                            detected_at_ms: now,
-                                        });
-                                    }
-                                    TerminalSignal::AuthExpired => {
-                                        if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-                                            if let Some(slot) =
-                                                slots.iter_mut().find(|s| s.id == slot_id)
-                                            {
-                                                slot.health = SlotHealth::AuthExpired;
-                                                let _ = self.db.save_slot(slot);
-                                            }
-                                        }
-                                        new_attention.push(AttentionItem {
-                                            id: format!("att-auth-{}", task.id),
-                                            node_id: node.id.clone(),
-                                            node_name: node.name.clone(),
-                                            workspace_id: Some(mission.workspace_id.clone()),
-                                            terminal_id: Some(tid.to_owned()),
-                                            mission_task_id: Some(task.id.clone()),
-                                            title: task.title.clone(),
-                                            kind: AttentionKind::AuthExpired,
-                                            detail: "Account login expired in Termexo terminal"
-                                                .into(),
-                                            detected_at_ms: now,
-                                        });
-                                    }
-                                    TerminalSignal::ApiError => {
-                                        if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-                                            if let Some(slot) =
-                                                slots.iter_mut().find(|s| s.id == slot_id)
-                                            {
-                                                slot.health = SlotHealth::RateLimited;
-                                                slot.cooldown_until_ms =
-                                                    Some(now + RATE_LIMIT_COOLDOWN_MS);
-                                                let _ = self.db.save_slot(slot);
-                                            }
-                                        }
-                                        task.status = TaskStatus::Failed;
-                                        task.last_error = Some(
-                                            "Provider API error detected in terminal output; failing over".into(),
-                                        );
-                                        reached_terminal = true;
-                                        if task.retry_count < task.max_retries
-                                            && !tasks_to_auto_retry.contains(&task.id)
-                                        {
-                                            tasks_to_auto_retry.push(task.id.clone());
-                                        }
-                                    }
-                                    TerminalSignal::WaitingApproval => {
-                                        task.status = TaskStatus::WaitingApproval;
-                                    }
-                                    _ => {}
-                                }
-                                if reached_terminal && task.result_summary.is_none() {
-                                    let tail: String = read
-                                        .data
-                                        .lines()
-                                        .map(str::trim_end)
-                                        .filter(|line| !line.trim().is_empty())
-                                        .rev()
-                                        .take(25)
-                                        .collect::<Vec<_>>()
-                                        .into_iter()
-                                        .rev()
-                                        .collect::<Vec<_>>()
-                                        .join("\n");
-                                    task.result_summary = Some(tail);
-                                }
-                            }
-                        }
+            if task.execution_mode == ExecutionMode::Terminal {
+                let Some(terminal) = session else {
+                    continue;
+                };
+                let status_changed =
+                    task.terminal_initial_status.as_deref() != Some(terminal.status.as_str());
+                let new_output = output
+                    .as_ref()
+                    .and_then(|output| {
+                        task.terminal_start_sequence
+                            .map(|start| output.sequence > start)
+                    })
+                    .unwrap_or(false);
+                if !task.terminal_stop_requested
+                    && !status_changed
+                    && !new_output
+                    && matches!(
+                        terminal.status.as_str(),
+                        "IDLE" | "COMPLETED" | "WAITING_INPUT"
+                    )
+                {
+                    continue;
+                }
+                if status_changed {
+                    task.terminal_initial_status = None;
+                }
+                task.assigned_workspace_id = Some(terminal.workspace_id.clone());
+                task.status = match terminal.status.as_str() {
+                    "COMPLETED" if task.terminal_stop_requested => TaskStatus::Cancelled,
+                    "COMPLETED" => TaskStatus::Completed,
+                    "STOPPED" | "DISCONNECTED" | "FAILED" | "IDLE"
+                        if task.terminal_stop_requested =>
+                    {
+                        TaskStatus::Cancelled
+                    }
+                    "STOPPED" | "DISCONNECTED" | "FAILED" => TaskStatus::Failed,
+                    "WAITING_APPROVAL" => TaskStatus::WaitingApproval,
+                    "WAITING_INPUT" => TaskStatus::WaitingInput,
+                    "IDLE" if old_status == TaskStatus::Running => TaskStatus::Running,
+                    _ => TaskStatus::Running,
+                };
+            }
 
-                        if reached_terminal {
-                            if let Some(slot_id) = task.assigned_slot_id.as_deref() {
-                                if let Some(slot) = slots.iter_mut().find(|s| s.id == slot_id) {
-                                    slot.active_count = slot.active_count.saturating_sub(1);
-                                    let _ = self.db.save_slot(slot);
+            let mut slot = self.task_slot(task)?;
+            let mut slot_changed = false;
+            if !matches!(
+                task.status,
+                TaskStatus::Completed | TaskStatus::Cancelled | TaskStatus::Pending
+            ) && !task.terminal_stop_requested
+            {
+                let signal = match terminal_status {
+                    Some("RATE_LIMITED") => TerminalSignal::RateLimited,
+                    Some("WAITING_APPROVAL") => TerminalSignal::WaitingApproval,
+                    _ if matches!(task.status, TaskStatus::WaitingInput | TaskStatus::Failed) => {
+                        output
+                            .as_ref()
+                            .map(|output| classify_recent_output(&output.data))
+                            .unwrap_or(TerminalSignal::Normal)
+                    }
+                    _ => TerminalSignal::Normal,
+                };
+                let provider_problem = match signal {
+                    TerminalSignal::RateLimited => Some((
+                        SlotHealth::RateLimited,
+                        AttentionKind::RateLimited,
+                        "Provider rate limit detected",
+                    )),
+                    TerminalSignal::AuthExpired => Some((
+                        SlotHealth::AuthExpired,
+                        AttentionKind::AuthExpired,
+                        "Provider authentication expired",
+                    )),
+                    TerminalSignal::ApiError => Some((
+                        SlotHealth::RateLimited,
+                        AttentionKind::TaskFailed,
+                        "Provider API error detected",
+                    )),
+                    TerminalSignal::WaitingApproval => {
+                        if task.status.is_active() {
+                            task.status = TaskStatus::WaitingApproval;
+                        }
+                        None
+                    }
+                    _ => None,
+                };
+
+                if let Some((health, kind, detail)) = provider_problem {
+                    if let Some(slot) = &mut slot {
+                        slot.cooldown_until_ms = (health == SlotHealth::RateLimited)
+                            .then_some(now + RATE_LIMIT_COOLDOWN_MS);
+                        slot.health = health;
+                        slot_changed = true;
+                    }
+                    attention.push(AttentionItem {
+                        id: format!("att-provider-{}", task.id),
+                        node_id: node.id.clone(),
+                        node_name: node.name.clone(),
+                        workspace_id: task.assigned_workspace_id.clone(),
+                        terminal_id: task.termexo_terminal_id.clone(),
+                        mission_task_id: Some(task.id.clone()),
+                        title: task.title.clone(),
+                        kind,
+                        detail: detail.into(),
+                        detected_at_ms: now,
+                    });
+                    task.last_error = Some(detail.into());
+                    if task.status.is_active() {
+                        if let Some(remote_id) = &task.termexo_task_id {
+                            task.provider_failure = Some(detail.into());
+                            match client.task_stop(remote_id).await {
+                                Ok(stopped)
+                                    if stopped.id == *remote_id
+                                        && matches!(
+                                            stopped.execution_state.as_str(),
+                                            "stopped" | "failed" | "cancelled"
+                                        ) =>
+                                {
+                                    task.status = TaskStatus::Failed;
+                                }
+                                _ => {
+                                    task.last_error = Some(format!("{detail}; Termexo has not confirmed stopping the current attempt"));
                                 }
                             }
-                            self.record_task_execution(task, now);
-                            if task.status == TaskStatus::Failed
-                                && task.retry_count >= task.max_retries
-                            {
-                                self.dispatch_notification(
-                                    "failed",
-                                    &format!("子任务失败：{}", task.title),
-                                    task.last_error
-                                        .as_deref()
-                                        .unwrap_or("执行失败且已达最大重试次数"),
-                                    Some(&node.id),
-                                    Some(&mission.workspace_id),
-                                    task.termexo_terminal_id.as_deref(),
-                                )
-                                .await;
-                            }
                         }
-                        task.updated_at_ms = now;
-                        let _ = self.db.save_task(task);
                     }
                 }
+            }
+
+            if task.status == TaskStatus::Completed
+                && task.role == TaskRole::Planner
+                && !planned.contains(&task.id)
+            {
+                task.status = TaskStatus::Failed;
+                task.last_error = Some("Planner finished without submitting a DAG plan".into());
+            }
+            let finished = matches!(
+                task.status,
+                TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled
+            );
+            if finished {
+                if task.result_summary.is_none() {
+                    task.result_summary = output
+                        .as_ref()
+                        .map(|output| terminal_tail(&output.data, 25));
+                }
+                if task.status == TaskStatus::Completed {
+                    if let Some(worktree) = task.worktree_path.as_deref() {
+                        task.diff_stat = collect_worktree_diff_stat(Path::new(worktree));
+                    }
+                }
+            }
+            if !task.status.is_active() {
+                if let Some(slot) = &mut slot {
+                    slot.active_count = slot.active_count.saturating_sub(1);
+                    slot_changed = true;
+                }
+            }
+            task.updated_at_ms = now;
+            self.db.save_task_changes(
+                std::slice::from_ref(task),
+                None,
+                if slot_changed { slot.as_ref() } else { None },
+            )?;
+            if finished {
+                self.record_task_execution(task, now);
+            }
+            if task.status == TaskStatus::Failed && task.retry_count < task.max_retries {
+                self.queue_retry(task)?;
             }
         }
 
         let newly_raised: Vec<AttentionItem> = {
-            let mut attention = self.attention.write().await;
-            let prev_ids: std::collections::HashSet<String> = attention
+            let mut current = self.attention.write().await;
+            let previous: HashSet<_> = current
                 .iter()
                 .filter(|item| item.node_id == node.id)
                 .map(|item| item.id.clone())
                 .collect();
-            let raised = new_attention
+            let raised = attention
                 .iter()
-                .filter(|item| !prev_ids.contains(&item.id))
+                .filter(|item| !previous.contains(&item.id))
                 .cloned()
                 .collect();
-            attention.retain(|item| item.node_id != node.id);
-            attention.extend(new_attention);
+            current.retain(|item| item.node_id != node.id);
+            current.extend(attention);
             raised
         };
-
         for item in newly_raised {
             let event = match item.kind {
                 AttentionKind::WaitingApproval => Some("approval"),
@@ -1339,9 +1732,9 @@ impl FleetRuntime {
                 AttentionKind::TaskFailed => Some("failed"),
                 AttentionKind::WaitingInput => None,
             };
-            if let Some(ev) = event {
+            if let Some(event) = event {
                 self.dispatch_notification(
-                    ev,
+                    event,
                     &format!("{} · {}", item.node_name, item.title),
                     &item.detail,
                     Some(&item.node_id),
@@ -1350,11 +1743,6 @@ impl FleetRuntime {
                 )
                 .await;
             }
-        }
-
-        // Auto-retry failed tasks with automatic difficulty escalation if within retry budget.
-        for failed_id in tasks_to_auto_retry {
-            let _ = self.retry_task_with_escalation(&failed_id).await;
         }
         Ok(())
     }
@@ -1396,6 +1784,7 @@ impl FleetRuntime {
     }
 
     async fn handle_submit_plan(&self, args: Value) -> Result<Value, String> {
+        let _operation = self.operations.lock().await;
         let parent_token = args
             .get("parent_token")
             .and_then(Value::as_str)
@@ -1420,10 +1809,53 @@ impl FleetRuntime {
             .find(|m| m.id == planner.mission_id)
             .ok_or("Mission not found")?;
 
+        if planner.role != TaskRole::Planner {
+            return Err("Only a Planner task can submit a DAG plan".into());
+        }
+        let previous: Vec<_> = all_tasks
+            .iter()
+            .filter(|task| task.parent_task_id.as_deref() == Some(&planner.id))
+            .filter(|task| task.id.starts_with("dag-"))
+            .collect();
+        if !previous.is_empty() {
+            return Ok(json!({
+                "missionId": mission.id,
+                "createdTaskIds": previous.iter().map(|task| &task.id).collect::<Vec<_>>(),
+                "dispatchedTaskIds": previous.iter().filter(|task| task.status.is_active())
+                    .map(|task| &task.id).collect::<Vec<_>>()
+            }));
+        }
+        if !planner.status.is_active() {
+            return Err("The Planner task is no longer active".into());
+        }
+        if planner.depth >= mission.guardrails.max_depth {
+            return Err("Plan exceeds the maximum sub-agent depth".into());
+        }
+        let existing_children = all_tasks
+            .iter()
+            .filter(|task| task.mission_id == mission.id && task.parent_task_id.is_some())
+            .count();
+        if steps.len()
+            > (mission.guardrails.max_subagents as usize).saturating_sub(existing_children)
+        {
+            return Err("Plan exceeds the mission's total sub-agent limit".into());
+        }
+        if mission.guardrails.max_concurrency == 0 {
+            return Err("Mission does not allow any concurrent sub-agents".into());
+        }
+
         let mut key_to_id: HashMap<String, String> = HashMap::new();
         for step in &steps {
+            if step.key.trim().is_empty()
+                || step.title.trim().is_empty()
+                || step.goal.trim().is_empty()
+            {
+                return Err("Each plan step requires a key, title and goal".into());
+            }
             let id = format!("dag-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
-            key_to_id.insert(step.key.clone(), id);
+            if key_to_id.insert(step.key.clone(), id).is_some() {
+                return Err(format!("Duplicate plan step key: {}", step.key));
+            }
         }
 
         let now = now_ms();
@@ -1437,38 +1869,14 @@ impl FleetRuntime {
                     .ok_or_else(|| format!("Unknown depends_on_keys reference: {dep_key}"))?;
                 depends_on.push(dep_id.clone());
             }
-            let (difficulty, auto_difficulty) = match step
-                .difficulty
-                .as_deref()
-                .and_then(DifficultyTier::parse)
-            {
-                Some(tier) => (tier, false),
-                None => (evaluate_difficulty(&step.title, &step.goal, 0), true),
-            };
-            let isolate = step
-                .isolate_worktree
-                .unwrap_or(mission.guardrails.isolate_worktree_by_default && step.role == TaskRole::Worker);
-            let mut worktree_path = None;
-            let mut worktree_branch = None;
-            if isolate {
-                let repo_path = self
-                    .snapshots
-                    .read()
-                    .await
-                    .get(&mission.node_id)
-                    .and_then(|snap| {
-                        snap.workspaces
-                            .iter()
-                            .find(|w| w.id == mission.workspace_id)
-                            .map(|w| w.project_path.clone())
-                    });
-                if let Some(repo) = repo_path {
-                    if let Ok(handle) = create_isolated_worktree(Path::new(&repo), &id) {
-                        worktree_path = Some(handle.path);
-                        worktree_branch = Some(handle.branch);
-                    }
-                }
-            }
+            let (difficulty, auto_difficulty) =
+                match step.difficulty.as_deref().and_then(DifficultyTier::parse) {
+                    Some(tier) => (tier, false),
+                    None => (evaluate_difficulty(&step.title, &step.goal, 0), true),
+                };
+            let isolate = step.isolate_worktree.unwrap_or(
+                mission.guardrails.isolate_worktree_by_default && step.role == TaskRole::Worker,
+            );
             let mut task = new_mission_task(
                 &mission,
                 Some(planner.id.clone()),
@@ -1487,38 +1895,33 @@ impl FleetRuntime {
                 now + idx as i64,
             );
             task.id = id;
-            task.worktree_path = worktree_path;
-            task.worktree_branch = worktree_branch;
+            task.isolate_worktree = isolate;
             created.push(task);
         }
 
         validate_dag_acyclic(&created).map_err(|e| e.to_string())?;
-        for task in &created {
-            self.db.save_task(task)?;
-        }
-
-        // Mark planner completed & release its concurrency slot so workers can start immediately.
         planner.status = TaskStatus::Completed;
         planner.result_summary = Some(format!("Submitted DAG plan with {} steps", created.len()));
         planner.updated_at_ms = now;
-        self.db.save_task(&planner)?;
-        self.record_task_execution(&planner, now);
-        if let Some(slot_id) = planner.assigned_slot_id.as_deref() {
-            if let Some(mut slot) = self.db.list_slots()?.into_iter().find(|s| s.id == slot_id) {
-                slot.active_count = slot.active_count.saturating_sub(1);
-                let _ = self.db.save_slot(&slot);
-            }
+        let mut slot = self.task_slot(&planner)?;
+        if let Some(slot) = &mut slot {
+            slot.active_count = slot.active_count.saturating_sub(1);
         }
+        let created_ids: Vec<_> = created.iter().map(|task| task.id.clone()).collect();
+        created.push(planner.clone());
+        self.db.save_task_changes(&created, None, slot.as_ref())?;
+        self.record_task_execution(&planner, now);
 
-        let dispatched = self.advance_mission_dag(&mission.id).await?;
+        let dispatched = self.advance_mission_dag_locked(&mission.id).await?;
         Ok(json!({
             "missionId": mission.id,
-            "createdTaskIds": created.iter().map(|t| &t.id).collect::<Vec<_>>(),
+            "createdTaskIds": created_ids,
             "dispatchedTaskIds": dispatched
         }))
     }
 
     async fn handle_spawn_subagent(&self, args: Value) -> Result<Value, String> {
+        let _operation = self.operations.lock().await;
         let parent_token = args
             .get("parent_token")
             .and_then(Value::as_str)
@@ -1542,6 +1945,9 @@ impl FleetRuntime {
             .find(|t| t.parent_token == parent_token)
             .cloned()
             .ok_or("Invalid parent_token")?;
+        if !parent.status.is_active() {
+            return Err("The parent task is no longer active".into());
+        }
         let mission = self
             .db
             .list_missions()?
@@ -1589,27 +1995,6 @@ impl FleetRuntime {
             .unwrap_or(mission.guardrails.isolate_worktree_by_default);
 
         let child_id = format!("sub-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
-        let mut worktree_path = None;
-        let mut worktree_branch = None;
-        if isolate_worktree {
-            let repo_path = self
-                .snapshots
-                .read()
-                .await
-                .get(&mission.node_id)
-                .and_then(|snap| {
-                    snap.workspaces
-                        .iter()
-                        .find(|w| w.id == mission.workspace_id)
-                        .map(|w| w.project_path.clone())
-                });
-            if let Some(repo) = repo_path {
-                if let Ok(handle) = create_isolated_worktree(Path::new(&repo), &child_id) {
-                    worktree_path = Some(handle.path);
-                    worktree_branch = Some(handle.branch);
-                }
-            }
-        }
 
         let exclude_model_family = if difficulty == DifficultyTier::L4 {
             parent.assigned_agent_type.as_ref().map(|agent| {
@@ -1643,10 +2028,20 @@ impl FleetRuntime {
         );
         child.id = child_id.clone();
         child.exclude_model_family = exclude_model_family;
-        child.worktree_path = worktree_path;
-        child.worktree_branch = worktree_branch;
+        child.isolate_worktree = isolate_worktree;
+        child.assigned_node_id.clone_from(&parent.assigned_node_id);
         self.db.save_task(&child)?;
-        let dispatched = self.dispatch_task(&child_id).await?;
+        let dispatched = match self.dispatch_task_locked(&child_id).await {
+            Ok(task) => task,
+            Err(error) => {
+                let task = self.task_by_id(&child_id)?;
+                if task.termexo_task_id.is_none() && task.worktree_path.is_none() {
+                    self.db.delete_task(&child_id)?;
+                    return Err(error);
+                }
+                task
+            }
+        };
         Ok(json!({
             "subagentId": dispatched.id,
             "title": dispatched.title,
@@ -1660,6 +2055,7 @@ impl FleetRuntime {
             "termexoTerminalId": dispatched.termexo_terminal_id,
             "worktreePath": dispatched.worktree_path,
             "worktreeBranch": dispatched.worktree_branch,
+            "lastError": dispatched.last_error,
             "status": dispatched.status
         }))
     }
@@ -1930,6 +2326,160 @@ impl FleetRuntime {
     }
 }
 
+fn validate_remote_mcp_url(input: &str) -> Result<Option<String>, String> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    let url =
+        reqwest::Url::parse(input).map_err(|_| "Enter a valid HTTPS URL for remote Fleet MCP")?;
+    let local = url.host_str().is_none_or(|host| {
+        let host = host.trim_matches(['[', ']']).trim_end_matches('.');
+        host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".localhost")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    });
+    if url.scheme() != "https"
+        || local
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(
+            "Use a non-local HTTPS MCP URL without credentials, a query or a fragment".into(),
+        );
+    }
+    Ok(Some(url.into()))
+}
+
+fn is_loopback_endpoint(endpoint: &str) -> bool {
+    reqwest::Url::parse(endpoint).is_ok_and(|url| {
+        url.host_str().is_some_and(|host| {
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .trim_matches(['[', ']'])
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|ip| ip.is_loopback())
+        })
+    })
+}
+
+fn unique_match<T>(mut candidates: impl Iterator<Item = T>) -> Option<T> {
+    let first = candidates.next()?;
+    candidates.next().is_none().then_some(first)
+}
+
+fn match_workspace<'a>(
+    mission: &Mission,
+    origin: Option<&TermexoWorkspaceSummary>,
+    node_id: &str,
+    workspaces: &'a [TermexoWorkspaceSummary],
+) -> Option<&'a TermexoWorkspaceSummary> {
+    if node_id == mission.node_id {
+        return workspaces
+            .iter()
+            .find(|workspace| workspace.id == mission.workspace_id);
+    }
+    let name = mission
+        .workspace_name
+        .as_deref()
+        .or_else(|| origin.map(|workspace| workspace.name.as_str()))?;
+    unique_match(
+        workspaces
+            .iter()
+            .filter(|workspace| workspace.name.trim().eq_ignore_ascii_case(name.trim())),
+    )
+}
+
+fn terminal_matches_slot(
+    terminal: &TermexoTerminalSummary,
+    slot: &AccountModelSlot,
+    workspace_id: &str,
+    preferred_terminal_id: Option<&str>,
+) -> bool {
+    terminal.live
+        && terminal.workspace_id == workspace_id
+        && matches!(
+            terminal.status.as_str(),
+            "IDLE" | "COMPLETED" | "WAITING_INPUT"
+        )
+        && terminal
+            .agent_type
+            .eq_ignore_ascii_case(slot.agent_type.as_str())
+        && (terminal.model.is_empty()
+            || slot.model_name.is_empty()
+            || terminal.model.eq_ignore_ascii_case(&slot.model_name))
+        && terminal.account_profile_id == slot.account_profile_id
+        && preferred_terminal_id
+            .filter(|id| !id.trim().is_empty())
+            .is_none_or(|id| terminal.id == id)
+}
+
+fn terminal_in_use(
+    terminal: &TermexoTerminalSummary,
+    node_id: &str,
+    tasks: &[MissionTask],
+) -> bool {
+    tasks.iter().any(|task| {
+        task.status.is_active()
+            && task.assigned_node_id.as_deref() == Some(node_id)
+            && task.termexo_terminal_id.as_deref() == Some(terminal.id.as_str())
+    })
+}
+
+async fn find_remote_task(
+    client: &TermexoMcpClient,
+    task: &MissionTask,
+    mission: &Mission,
+    workspaces: &[TermexoWorkspaceSummary],
+    boards: &mut HashMap<String, Option<TermexoTaskBoardSnapshot>>,
+    remote_id: &str,
+) -> Option<TermexoTaskRecord> {
+    // Older records did not store the assigned workspace. Resolve them by the remote task ID.
+    let candidates: Vec<_> = match task.assigned_workspace_id.as_deref() {
+        Some(id) => vec![id],
+        None if task.assigned_node_id.as_deref() == Some(mission.node_id.as_str()) => {
+            vec![mission.workspace_id.as_str()]
+        }
+        None => workspaces
+            .iter()
+            .map(|workspace| workspace.id.as_str())
+            .collect(),
+    };
+    for id in candidates {
+        if !boards.contains_key(id) {
+            boards.insert(id.to_owned(), client.task_list(id).await.ok());
+        }
+        if let Some(remote) = boards
+            .get(id)
+            .and_then(Option::as_ref)
+            .and_then(|board| board.tasks.iter().find(|remote| remote.id == remote_id))
+        {
+            return Some(remote.clone());
+        }
+    }
+    None
+}
+
+fn terminal_tail(text: &str, lines: usize) -> String {
+    let mut tail: Vec<_> = text
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .rev()
+        .take(lines)
+        .collect();
+    tail.reverse();
+    tail.join("\n")
+}
+
+fn classify_recent_output(text: &str) -> TerminalSignal {
+    classify_terminal_output(&terminal_tail(text, 12))
+}
+
 fn difficulty_cost_units(tier: DifficultyTier) -> u32 {
     match tier {
         DifficultyTier::L1 => 1,
@@ -2105,6 +2655,7 @@ fn new_mission_task(
         preferred_agent,
         exclude_model_family: None,
         assigned_node_id: Some(mission.node_id.clone()),
+        assigned_workspace_id: None,
         assigned_slot_id: None,
         assigned_agent_type: None,
         assigned_model_name: None,
@@ -2112,6 +2663,11 @@ fn new_mission_task(
         routing_reason: None,
         termexo_task_id: None,
         termexo_terminal_id: None,
+        terminal_stop_requested: false,
+        terminal_start_sequence: None,
+        terminal_initial_status: None,
+        provider_failure: None,
+        isolate_worktree: false,
         worktree_path: None,
         worktree_branch: None,
         status: TaskStatus::Pending,
@@ -2151,6 +2707,10 @@ fn infer_default_slot_profile(model: &str) -> (Vec<DifficultyTier>, u8, u8) {
         (vec![DifficultyTier::L2, DifficultyTier::L3], 3, 4)
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_flow_tests.rs"]
+mod flow_tests;
 
 #[cfg(test)]
 mod tests {

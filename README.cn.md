@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1"><img alt="Version 0.1.0-preview.1" src="https://img.shields.io/badge/version-0.1.0--preview.1-3ec691"></a>
-  <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows">
+  <a href="https://github.com/gemron/Termexo-Fleet/releases"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-3ec691"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-Workspace-DEA584?logo=rust&logoColor=black">
   <img alt="Angular 22" src="https://img.shields.io/badge/Angular-22-DD0031?logo=angular">
@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://www.termexo.com/#fleet">官网展示页</a> ·
-  <a href="https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1">下载预览版</a> ·
+  <a href="https://github.com/gemron/Termexo-Fleet/releases">下载安装包</a> ·
   <a href="./docs/preview/PREVIEW.md">完整预览手册</a> ·
   <a href="https://github.com/gemron/Termexo">Termexo 工作台</a>
 </p>
@@ -138,12 +138,27 @@ flowchart LR
 
 ## 快速开始
 
-### 方式一：直接下载 Windows 预览安装包
-前往 **[GitHub Releases (`v0.1.0-preview.1`)](https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.0-preview.1)** 下载：
-- `Termexo.Fleet_0.1.0_x64-setup.exe`（NSIS 安装包，推荐）
-- `Termexo.Fleet_0.1.0_x64_en-US.msi`（Windows MSI 安装包）
+### 方式一：通过 npm 一键运行（Windows / macOS / Linux）
+需要 Node.js `18.18+`：
 
-### 方式二：源码运行
+```bash
+# 无需全局安装，直接拉取校验并启动桌面端
+npx termexo-fleet@latest
+
+# 或全局安装后直接运行
+npm install --global termexo-fleet
+termexo-fleet
+```
+
+### 方式二：直接下载各平台安装包
+前往 **[GitHub Releases](https://github.com/gemron/Termexo-Fleet/releases)** 下载对应系统版本：
+- **Windows (x64)**：`Termexo-Fleet_<版本>_x64-setup.exe`（NSIS，推荐）/ `.msi`
+- **macOS (Apple Silicon / Intel)**：`Termexo-Fleet_<版本>_macos-arm64.dmg` / `macos-x64.dmg`
+- **Linux (x64)**：`.deb`（Debian/Ubuntu）、`.rpm`（Fedora/RHEL）、`.AppImage`
+
+> 自动化跨平台编译与 npm 发布指南见 **[docs/releases.md](./docs/releases.md)**。
+
+### 方式三：源码运行
 
 ```bash
 # 安装前端依赖
