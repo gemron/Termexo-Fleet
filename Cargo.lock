@@ -1208,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "fleet-connector"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fleet-protocol",
  "reqwest",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "fleet-mcp-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "reqwest",
@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "fleet-orchestrator"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fleet-protocol",
  "serde",
@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "fleet-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1253,7 +1253,7 @@ dependencies = [
 
 [[package]]
 name = "fleet-router"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fleet-protocol",
  "serde",
@@ -4709,7 +4709,7 @@ dependencies = [
 
 [[package]]
 name = "termexo-fleet"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "fleet-connector",

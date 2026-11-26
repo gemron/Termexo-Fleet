@@ -31,7 +31,7 @@ const jsonTargets = [
   'package.json',
   'apps/desktop-ui/package.json',
   'src-tauri/tauri.conf.json',
-  'packages/npm/package.json',
+  'packages/termexo-fleet/package.json',
 ];
 
 let mismatched = false;

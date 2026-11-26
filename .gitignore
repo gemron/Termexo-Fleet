@@ -5,7 +5,11 @@
 /apps/desktop-ui/.angular
 /dist-artifacts
 /release-assets
-/packages/npm/.npmrc
+/artifacts
+/downloaded
+/packages/termexo-fleet/vendor
+/packages/termexo-fleet/.npmrc
+/.npmrc
 *.db
 *.db-shm
 *.db-wal

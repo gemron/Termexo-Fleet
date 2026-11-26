@@ -1,0 +1,55 @@
+{
+  "name": "termexo-fleet",
+  "version": "0.1.1",
+  "description": "Run the Termexo Fleet AI coding fleet commander directly from npm on Windows, macOS and Linux",
+  "type": "module",
+  "bin": {
+    "termexo-fleet": "bin/termexo-fleet.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "vendor/win32-x64/termexo-fleet.exe",
+    "vendor/darwin-arm64/Termexo Fleet.app.tar.gz",
+    "vendor/darwin-x64/Termexo Fleet.app.tar.gz",
+    "vendor/linux-x64/Termexo-Fleet.tar.gz",
+    "README.md"
+  ],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "prepack": "node scripts/verify-payload.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "termexo",
+    "termexo-fleet",
+    "ai-agents",
+    "mcp",
+    "claude",
+    "codex",
+    "orchestrator",
+    "desktop"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gemron/Termexo-Fleet.git",
+    "directory": "packages/termexo-fleet"
+  },
+  "homepage": "https://www.termexo.com/#fleet",
+  "bugs": {
+    "url": "https://github.com/gemron/Termexo-Fleet/issues"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

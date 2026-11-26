@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gemron/Termexo-Fleet/releases"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-3ec691"></a>
+  <a href="https://github.com/gemron/Termexo-Fleet/releases"><img alt="Version 0.1.1" src="https://img.shields.io/badge/version-0.1.1-3ec691"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-Workspace-DEA584?logo=rust&logoColor=black">

@@ -1,0 +1,187 @@
+name: Build Windows installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Windows (x64)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CI: "true"
+      CARGO_TERM_COLOR: always
+      TARGET: x86_64-pc-windows-msvc
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-x86_64-pc-windows-msvc
+          cache-on-failure: true
+
+      - name: Sync release version if requested
+        if: inputs.version != ''
+        run: node scripts/release-sync-version.mjs "${{ inputs.version }}"
+
+      - name: Install frontend dependencies
+        run: npm --prefix apps/desktop-ui ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Run native Rust workspace tests
+        run: cargo test --workspace --lib --bins --target "$env:TARGET" -- --quiet
+
+      - name: Clean cached desktop bundles
+        run: node scripts/clean-desktop-bundles.mjs
+
+      - name: Build EXE and MSI
+        run: node apps/desktop-ui/node_modules/@tauri-apps/cli/tauri.js build --target "$env:TARGET" --bundles nsis,msi
+
+      - name: Verify and collect installers
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $release = Join-Path "target/$env:TARGET" release
+          $bundle = Join-Path $release bundle
+          $output = "artifacts/$env:TARGET"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+
+          $binary = Get-Item -LiteralPath (Join-Path $release termexo-fleet.exe)
+          $binaryBytes = [System.IO.File]::ReadAllBytes($binary.FullName)
+          if ([BitConverter]::ToUInt16($binaryBytes, 0) -ne 0x5A4D) { throw 'Missing executable MZ header' }
+          $peOffset = [BitConverter]::ToInt32($binaryBytes, 0x3C)
+          if ([BitConverter]::ToUInt32($binaryBytes, $peOffset) -ne 0x4550) { throw 'Missing PE signature' }
+          if ([BitConverter]::ToUInt16($binaryBytes, $peOffset + 4) -ne 0x8664) { throw 'Application is not x64' }
+
+          $setupSrc = Get-ChildItem (Join-Path $bundle 'nsis/*.exe') | Select-Object -First 1
+          $msiSrc = Get-ChildItem (Join-Path $bundle 'msi/*.msi') | Select-Object -First 1
+          if (-not $setupSrc -or -not $msiSrc) { throw 'Missing NSIS or MSI installer output' }
+
+          $setupName = "Termexo-Fleet_${version}_x64-setup.exe"
+          $msiName = "Termexo-Fleet_${version}_x64_en-US.msi"
+          Copy-Item -LiteralPath $setupSrc.FullName -Destination (Join-Path $output $setupName) -Force
+          Copy-Item -LiteralPath $msiSrc.FullName -Destination (Join-Path $output $msiName) -Force
+
+          $msiOut = Get-Item -LiteralPath (Join-Path $output $msiName)
+          $installer = $database = $summary = $null
+          try {
+            $installer = New-Object -ComObject WindowsInstaller.Installer
+            $database = $installer.OpenDatabase($msiOut.FullName, 0)
+            $summary = $database.SummaryInformation(0)
+            if ($summary.Property(7) -notmatch '^x64;') { throw 'MSI architecture mismatch' }
+          } finally {
+            foreach ($comObject in @($summary, $database, $installer)) {
+              if ($null -ne $comObject) { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObject) }
+            }
+          }
+
+          $checksums = @($setupName, $msiName) | Sort-Object | ForEach-Object {
+            $full = Join-Path $output $_
+            $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $_"
+          }
+          $utf8 = [System.Text.UTF8Encoding]::new($false)
+          [System.IO.File]::WriteAllLines((Join-Path $output SHA256SUMS.txt), [string[]]$checksums, $utf8)
+
+          $metadata = [ordered]@{
+            version = $version
+            commit = $env:GITHUB_SHA
+            target = $env:TARGET
+            executableArchitectureVerified = $true
+            msiArchitectureVerified = $true
+          } | ConvertTo-Json -Depth 4
+          [System.IO.File]::WriteAllText((Join-Path $output build-info.json), $metadata, $utf8)
+
+          @"
+          ### Termexo Fleet $version — Windows x64
+          Includes NSIS setup EXE, MSI installer, SHA-256 checksums, and build metadata.
+          Source commit: $env:GITHUB_SHA
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Test and stage Windows npm payload
+        env:
+          CARGO_TARGET_DIR: target/x86_64-pc-windows-msvc
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm --prefix packages/termexo-fleet test
+          if ($LASTEXITCODE -ne 0) { throw 'npm launcher tests failed' }
+          node packages/termexo-fleet/scripts/stage-binary.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows npm staging failed' }
+          New-Item -ItemType Directory -Path artifacts/npm-windows -Force | Out-Null
+          Copy-Item -LiteralPath packages/termexo-fleet/vendor/win32-x64/termexo-fleet.exe -Destination artifacts/npm-windows -Force
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $binary = "target/$env:TARGET/release/termexo-fleet.exe"
+          $exeHash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          $metadata = [ordered]@{
+            version = $version
+            commit = $env:GITHUB_SHA
+            target = $env:TARGET
+            executableSha256 = $exeHash
+            files = @(
+              [ordered]@{ name = 'termexo-fleet.exe'; sha256 = $exeHash }
+            )
+          } | ConvertTo-Json -Depth 4
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'artifacts/npm-windows/build-info.json'), $metadata, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Upload Windows npm payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: Termexo-Fleet-npm-windows
+          path: artifacts/npm-windows/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: Termexo-Fleet-Windows-x86_64-pc-windows-msvc
+          path: artifacts/x86_64-pc-windows-msvc/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

@@ -1,0 +1,156 @@
+name: Build macOS installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: macOS (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Apple Silicon
+            runner: macos-15
+            target: aarch64-apple-darwin
+            arch: arm64
+            dmg_arch: aarch64
+          - label: Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x86_64
+            dmg_arch: x64
+    env:
+      CI: "true"
+      CARGO_TERM_COLOR: always
+      # Ad-hoc signing needs no certificate. These builds are not notarized.
+      APPLE_SIGNING_IDENTITY: "-"
+      TARGET: ${{ matrix.target }}
+      ARCH: ${{ matrix.arch }}
+      DMG_ARCH: ${{ matrix.dmg_arch }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Sync release version if requested
+        if: inputs.version != ''
+        run: node scripts/release-sync-version.mjs "${{ inputs.version }}"
+
+      - name: Install frontend dependencies
+        run: npm --prefix apps/desktop-ui ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Run native Rust workspace tests
+        run: cargo test --workspace --lib --bins --target "$TARGET" -- --quiet
+
+      - name: Clean cached desktop bundles
+        run: node scripts/clean-desktop-bundles.mjs
+
+      - name: Build app and DMG
+        run: node scripts/run-tauri.mjs build --target "$TARGET" --bundles app,dmg
+
+      - name: Verify and collect installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="target/$TARGET/release/bundle"
+          app="$bundle/macos/Termexo Fleet.app"
+          output="artifacts/$TARGET"
+          version=$(node -p "require('./package.json').version")
+          mkdir -p "$output"
+
+          lipo "$app/Contents/MacOS/termexo-fleet" -verify_arch "$ARCH"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          dmg_src=$(find "$bundle/dmg" -maxdepth 1 -name '*.dmg' | head -n 1)
+          test -n "$dmg_src"
+          hdiutil verify "$dmg_src"
+          cp "$dmg_src" "$output/Termexo-Fleet_${version}_${DMG_ARCH}.dmg"
+
+          # Archive the app before upload to preserve executable bits, symlinks and ad-hoc signature.
+          tar -czf "$output/Termexo-Fleet_${version}_${ARCH}.app.tar.gz" -C "$bundle/macos" "Termexo Fleet.app"
+
+          jq -n --arg version "$version" --arg commit "$GITHUB_SHA" --arg target "$TARGET" \
+            '{version: $version, commit: $commit, target: $target, signing: "ad-hoc", notarized: false}' \
+            > "$output/build-info.json"
+          (cd "$output" && shasum -a 256 *.dmg *.app.tar.gz > SHA256SUMS.txt)
+
+          {
+            echo "### Termexo Fleet $version — $ARCH"
+            echo "Includes a DMG, an app archive, SHA-256 checksums, and build metadata."
+            echo "Signing: ad-hoc. Apple notarization: not configured."
+            echo "Source commit: $GITHUB_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test npm launcher and app extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix packages/termexo-fleet test
+          app=$(node --input-type=module <<'NODE'
+          import { prepareMacApplication } from './packages/termexo-fleet/lib/macos.js';
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+          console.log(prepareMacApplication({
+            version,
+            archivePath: `artifacts/${process.env.TARGET}/Termexo-Fleet_${version}_${process.env.ARCH}.app.tar.gz`,
+            cacheRoot: join(process.env.RUNNER_TEMP, 'termexo-fleet-npm-smoke'),
+          }));
+          NODE
+          )
+          test -x "$app/Contents/MacOS/termexo-fleet"
+          lipo "$app/Contents/MacOS/termexo-fleet" -verify_arch "$ARCH"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          node packages/termexo-fleet/bin/termexo-fleet.js --version
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: Termexo-Fleet-macOS-${{ matrix.target }}
+          path: artifacts/${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

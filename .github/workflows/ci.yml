@@ -18,13 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: npm
           cache-dependency-path: apps/desktop-ui/package-lock.json
 
       - name: Install frontend dependencies
@@ -45,26 +47,31 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-22.04
-          - macos-14
-          - windows-latest
+          - ubuntu-24.04
+          - macos-15
+          - windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Install Linux Tauri system dependencies
+      - name: Install Linux Tauri & Secret Service dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            build-essential pkg-config \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
             libxdo-dev \
             libssl-dev \
-            libsecret-1-dev
+            libdbus-1-dev \
+            libsecret-1-dev \
+            gnome-keyring
 
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -72,17 +79,30 @@ jobs:
       - name: Cache Cargo artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Setup Node.js 24 & build frontendDist for Tauri compile checks
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: npm
           cache-dependency-path: apps/desktop-ui/package-lock.json
 
-      - name: Build frontend assets
+      - name: Build frontend assets for Tauri compile checks
         run: |
           npm --prefix apps/desktop-ui ci
           npm run build
 
-      - name: Run Rust workspace unit tests
+      - name: Run Rust workspace unit tests (Linux with Secret Service)
+        if: runner.os == 'Linux'
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/termexo-fleet-keyring
+        run: |
+          mkdir -p "$XDG_DATA_HOME"
+          dbus-run-session -- bash -eu -c '
+            printf "\n" | gnome-keyring-daemon --unlock --components=secrets \
+              --control-directory="$XDG_DATA_HOME/control"
+            cargo test --workspace --lib --bins
+          '
+
+      - name: Run Rust workspace unit tests (macOS / Windows)
+        if: runner.os != 'Linux'
         run: cargo test --workspace --lib --bins

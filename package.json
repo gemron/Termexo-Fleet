@@ -1,6 +1,6 @@
 {
   "name": "termexo-fleet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first AI fleet commander for orchestrating Termexo instances",
   "private": true,
   "license": "MIT",
@@ -8,7 +8,7 @@
     "dev": "npm --prefix apps/desktop-ui start -- --host 127.0.0.1 --port 4201",
     "build": "npm --prefix apps/desktop-ui run build",
     "test": "npm --prefix apps/desktop-ui test -- --watch=false",
-    "test:npm": "node --test packages/npm/test/launcher.test.mjs",
+    "test:npm": "npm --prefix packages/termexo-fleet test",
     "release:sync": "node scripts/release-sync-version.mjs",
     "tauri:dev": "node scripts/run-tauri.mjs dev",
     "tauri:build": "node scripts/run-tauri.mjs build"

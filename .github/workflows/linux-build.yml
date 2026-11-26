@@ -1,0 +1,135 @@
+name: Build and test Linux desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Optional SemVer version override to sync before building
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Linux (x64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      TARGET: x86_64-unknown-linux-gnu
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-x86_64
+          cache-on-failure: true
+
+      - name: Install native build and Secret Service dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            libsecret-1-dev \
+            patchelf \
+            gnome-keyring \
+            fontconfig \
+            xdg-utils
+
+      - name: Sync release version if requested
+        if: inputs.version != ''
+        run: node scripts/release-sync-version.mjs "${{ inputs.version }}"
+
+      - name: Install frontend dependencies & test
+        run: |
+          npm --prefix apps/desktop-ui ci
+          npm run build
+          npm test
+          npm --prefix packages/termexo-fleet test
+
+      - name: Run Rust workspace tests with Secret Service keyring
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/termexo-fleet-keyring
+        run: |
+          mkdir -p "$XDG_DATA_HOME"
+          dbus-run-session -- bash -eu -c '
+            printf "\n" | gnome-keyring-daemon --unlock --components=secrets \
+              --control-directory="$XDG_DATA_HOME/control"
+            cargo test --workspace --lib --bins --target "$TARGET"
+          '
+
+      - name: Clean cached desktop bundles
+        run: node scripts/clean-desktop-bundles.mjs
+
+      - name: Build Debian package
+        run: node scripts/run-tauri.mjs build --target "$TARGET" --bundles deb
+
+      - name: Stage Linux artifacts and npm payload
+        env:
+          TERMEXO_FLEET_LINUX_ARTIFACT_DIR: artifacts/x86_64-unknown-linux-gnu
+        run: node packages/termexo-fleet/scripts/stage-linux.mjs
+
+      - name: Smoke-test Linux npm extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(node --input-type=module <<'NODE'
+          import { prepareLinuxApplication } from './packages/termexo-fleet/lib/linux.js';
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+          console.log(prepareLinuxApplication({
+            version,
+            archivePath: `artifacts/x86_64-unknown-linux-gnu/Termexo-Fleet_${version}_linux_x64.tar.gz`,
+            cacheRoot: join(process.env.RUNNER_TEMP, 'termexo-fleet-linux-npm-smoke'),
+          }));
+          NODE
+          )
+          test -x "$bin"
+          ldd "$bin" | (! grep -q "not found")
+          node packages/termexo-fleet/bin/termexo-fleet.js --version
+
+      - name: Upload Linux installers and archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: Termexo-Fleet-Linux-x86_64-unknown-linux-gnu
+          path: artifacts/x86_64-unknown-linux-gnu/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
