@@ -40,6 +40,12 @@
 
 ---
 
+## 产品宣传片
+
+<a href="https://www.termexo.com/#fleet-promo"><img src="./docs/promo/termexo-fleet-promo-cover.png" alt="观看 45 秒 Termexo Fleet 产品宣传片" width="520"></a>
+
+[观看 45 秒宣传片](https://www.termexo.com/#fleet-promo) · [打开 MP4](https://www.termexo.com/assets/termexo-fleet-promo.mp4)
+
 ## 解决什么问题
 
 同时使用 Claude Code、Codex CLI、OpenCode、Pi Agent、Grok Build、Antigravity 以及多套账号/多台电脑时，常见四大痛点：

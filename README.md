@@ -40,6 +40,12 @@ Describe a goal once. **Termexo Fleet** grades task complexity (`L1–L4`), pick
 
 ---
 
+## Product video
+
+<a href="https://www.termexo.com/#fleet-promo"><img src="./docs/promo/termexo-fleet-promo-cover.png" alt="Watch the 45-second Termexo Fleet product tour" width="520"></a>
+
+[Watch the 45-second tour](https://www.termexo.com/#fleet-promo) · [Open MP4](https://www.termexo.com/assets/termexo-fleet-promo.mp4)
+
 ## Why Termexo Fleet?
 
 Running multiple coding agents (Claude Code, Codex CLI, OpenCode, Pi Agent, Grok Build, Antigravity) across several accounts and machines quickly creates four operational bottlenecks:
