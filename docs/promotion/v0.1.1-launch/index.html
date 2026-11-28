@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Termexo Fleet v0.1.1 — 全平台宣传一键提交控制台</title>
+  <style>
+    :root {
+      --bg: #070d0b;
+      --panel: #0e1714;
+      --panel-2: #13201c;
+      --border: rgba(210, 236, 224, 0.12);
+      --mint: #3ec691;
+      --mint-soft: rgba(62, 198, 145, 0.14);
+      --text: #eef7f3;
+      --muted: #93afa2;
+      --amber: #f2b444;
+      --red: #f26d63;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans SC', 'Microsoft YaHei UI', system-ui, sans-serif;
+      line-height: 1.65;
+      padding: 36px 24px 80px;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; }
+    header {
+      padding: 28px 32px;
+      border-radius: 20px;
+      background: linear-gradient(140deg, rgba(62, 198, 145, 0.14), rgba(14, 23, 20, 0.96));
+      border: 1px solid rgba(62, 198, 145, 0.3);
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); margin-top: 6px; font-size: 14.5px; }
+    .assets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .asset-chip {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(7, 13, 11, 0.72);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .asset-chip strong { font-size: 13.5px; color: #7ee8be; }
+    .asset-chip code {
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 11.5px;
+      color: #c8dfd4;
+      word-break: break-all;
+    }
+    .progress-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      margin-bottom: 22px;
+      font-size: 14px;
+    }
+    .cards { display: grid; gap: 16px; }
+    .card {
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .card.done { border-color: rgba(62, 198, 145, 0.45); opacity: 0.78; }
+    .card-head {
+      padding: 18px 22px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title-group { display: flex; align-items: center; gap: 12px; }
+    .card-title-group input[type=checkbox] {
+      width: 19px;
+      height: 19px;
+      accent-color: var(--mint);
+      cursor: pointer;
+    }
+    .plat-name { font-size: 18px; font-weight: 700; }
+    .tag {
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--mint-soft);
+      color: #7ee8be;
+      border: 1px solid rgba(62, 198, 145, 0.3);
+    }
+    .tag.video { background: rgba(77, 184, 240, 0.14); color: #8ad2fa; border-color: rgba(77, 184, 240, 0.35); }
+    .tag.en { background: rgba(242, 180, 68, 0.14); color: #f8cd73; border-color: rgba(242, 180, 68, 0.35); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button, a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    button:hover, a.btn:hover { background: rgba(62, 198, 145, 0.18); border-color: rgba(62, 198, 145, 0.45); }
+    a.btn.primary { background: var(--mint); color: #05130d; border-color: transparent; }
+    a.btn.primary:hover { background: #54d9a3; }
+    .card-body { padding: 18px 22px; }
+    .meta-row { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .meta-row strong { color: var(--text); }
+    details summary { cursor: pointer; color: #7ee8be; font-size: 13.5px; font-weight: 600; }
+    pre.preview {
+      margin-top: 12px;
+      padding: 16px;
+      border-radius: 12px;
+      background: #060b09;
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 12.5px;
+      color: #d6ebe1;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .excluded {
+      margin-top: 28px;
+      padding: 18px 22px;
+      border-radius: 16px;
+      background: rgba(242, 109, 99, 0.08);
+      border: 1px solid rgba(242, 109, 99, 0.25);
+      font-size: 13.5px;
+      color: #f3c4c0;
+    }
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      background: #103526;
+      border: 1px solid #3ec691;
+      color: #e9fbf3;
+      font-weight: 600;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.2s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Termexo Fleet v0.1.1 — 全平台宣传一键提交控制台</h1>
+      <p class="sub">每个平台独立角度起稿 · 均已核对源码边界与 AI 披露声明 · 点击按钮即可一键复制路径 / 标题 / 正文并直达官方投稿页。</p>
+      <div class="assets-grid">
+        <div class="asset-chip">
+          <strong>9:16 手机竖屏大字视频（抖音/视频号/小红书）</strong>
+          <code>D:\devlop\Termexo-Fleet\docs\promo\termexo-fleet-promo-vertical.mp4</code>
+          <button onclick="copyText('D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-vertical.mp4','已复制竖屏视频路径')">复制路径</button>
+        </div>
+        <div class="asset-chip">
+          <strong>9:16 竖屏高清封面</strong>
+          <code>D:\devlop\Termexo-Fleet\docs\promo\termexo-fleet-promo-vertical-cover.png</code>
+          <button onclick="copyText('D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-vertical-cover.png','已复制竖屏封面路径')">复制路径</button>
+        </div>
+        <div class="asset-chip">
+          <strong>16:9 横屏 1080p60 视频（B站/PH/X/YouTube）</strong>
+          <code>D:\devlop\Termexo-Fleet\docs\promo\termexo-fleet-promo.mp4</code>
+          <button onclick="copyText('D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo.mp4','已复制横屏视频路径')">复制路径</button>
+        </div>
+        <div class="asset-chip">
+          <strong>16:9 横屏高清封面</strong>
+          <code>D:\devlop\Termexo-Fleet\docs\promo\termexo-fleet-promo-cover.png</code>
+          <button onclick="copyText('D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-cover.png','已复制横屏封面路径')">复制路径</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="progress-bar">
+      <div><strong>已完成发布进度：</strong> <span id="prog-text">1 / 14</span>（GitHub 仓库官网与 12 个 Topics 标签已自动完成）</div>
+      <div style="color: var(--muted)">勾选状态自动保存在本地浏览器</div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="excluded">
+      <strong>合规主动排除站点（遵循 Termexo 历史发布规范）：</strong>
+      dev.to（禁止 AI 营销稿）、Hacker News / Show HN（要求作者人工手写且禁止自动化提交）、阿里云开发者社区、腾讯云开发者社区（限制 AI 生成及引流推广）、博客园（如投稿建议人工重写纯源码分析）。
+    </div>
+  </div>
+
+  <div class="toast" id="toast">已复制</div>
+
+  <script>
+    const PLATFORMS = [
+      { id: 'oschina', name: 'OSCHINA 开源中国', badge: '开源首发', kind: '', submitUrl: 'https://my.oschina.net/u/223115/blog/write', extraUrl: 'https://www.oschina.net/news/add', extraLabel: '投递开源资讯', file: '01-oschina.md', title: 'Termexo Fleet v0.1.1 发布：本地优先的多机 AI 编程舰队指挥中枢', media: '封面：termexo-fleet-promo-cover.png' },
+      { id: 'zhihu', name: '知乎专栏 / 问答', badge: '深度痛点', kind: '', submitUrl: 'https://zhuanlan.zhihu.com/write', file: '02-zhihu.md', title: '多账号、多机器跑 Claude Code / Codex 时，如何做到“既省额度又零黑盒”？', media: '封面：termexo-fleet-promo-cover.png' },
+      { id: 'juejin', name: '稀土掘金', badge: 'Rust 工程实践', kind: '', submitUrl: 'https://juejin.cn/editor/drafts/new', file: '03-juejin.md', title: '用 Rust + Tauri 2 + 反向 MCP 搭建多机 AI 编程调度中枢：Termexo Fleet 工程实践', media: '标签：人工智能 / 开发工具 / Rust' },
+      { id: 'csdn', name: 'CSDN 博客', badge: '安装上手指南', kind: '', submitUrl: 'https://editor.csdn.net/md/', file: '04-csdn.md', title: 'Termexo Fleet v0.1.1 上手指南：跨平台安装、多机调度与 L1–L4 模型路由配置', media: '封面：termexo-fleet-promo-cover.png' },
+      { id: 'segmentfault', name: 'SegmentFault 思否', badge: '架构复盘', kind: '', submitUrl: 'https://segmentfault.com/write', file: '05-segmentfault.md', title: '为什么多 Agent 编程编排容易失控？我们在 Termexo Fleet 里的 4 个架构取舍', media: '标签：rust / ai / tauri / mcp' },
+      { id: 'v2ex', name: 'V2EX 分享创造', badge: '开源短帖', kind: '', submitUrl: 'https://www.v2ex.com/write?node=create', file: '06-v2ex.md', title: '开源了一个本地多机 AI 编程 Agent 调度台：Termexo Fleet（支持 L1-L4 难度路由、异构审与实时 PTY 接管）', media: '节点：分享创造' },
+      { id: 'producthunt', name: 'Product Hunt', badge: 'EN Launch', kind: 'en', submitUrl: 'https://www.producthunt.com/posts/new', file: '07-producthunt.md', title: 'Termexo Fleet — Local-first AI coding fleet commander with zero black-box', media: '上传：termexo-fleet-promo.mp4 + 16:9 封面' },
+      { id: 'medium', name: 'Medium', badge: 'EN Deep Dive', kind: 'en', submitUrl: 'https://medium.com/new-story', file: '08-medium.md', title: 'Orchestrating Multi-Machine Coding Agents Without a Black Box: Inside Termexo Fleet v0.1.1', media: '无 paywall · 已含 AI disclosure' },
+      { id: 'bilibili', name: 'B 站（16:9 横屏 60fps）', badge: '视频首发', kind: 'video', submitUrl: 'https://member.bilibili.com/platform/upload/video/frame', file: '09-short-video-social.md', title: '【MIT 开源】本地多机 AI 编程舰队指挥中枢 Termexo Fleet v0.1.1：零黑盒终端、L1–L4 路由与异构交叉审', media: '上传：termexo-fleet-promo.mp4 + 横屏封面' },
+      { id: 'douyin', name: '抖音（9:16 手机竖屏大字版）', badge: '竖屏短视频', kind: 'video', submitUrl: 'https://creator.douyin.com/creator-micro/content/upload', file: '09-short-video-social.md', title: '开源了一个本地 AI 编程舰队指挥台：多账号自动切号、L1–L4 省费路由、Claude 写完自动叫 Codex 异构审', media: '上传：termexo-fleet-promo-vertical.mp4 + 竖屏封面' },
+      { id: 'wechatChannels', name: '微信视频号（9:16 竖屏）', badge: '竖屏短视频', kind: 'video', submitUrl: 'https://channels.weixin.qq.com/platform/post/create', file: '09-short-video-social.md', title: '跑 Claude Code 和 Codex 总被限流烧额度？我用 Rust 写了个零黑盒的多机调度台（MIT 开源）', media: '上传：termexo-fleet-promo-vertical.mp4 + 竖屏封面' },
+      { id: 'xiaohongshu', name: '小红书（9:16 竖屏）', badge: '竖屏短视频', kind: 'video', submitUrl: 'https://creator.xiaohongshu.com/publish/publish', file: '09-short-video-social.md', title: '多台电脑一起跑 AI 编程 Agent！45 秒看懂本地优先、零黑盒的 Termexo Fleet', media: '上传：termexo-fleet-promo-vertical.mp4 + 竖屏封面' },
+      { id: 'x', name: 'X (Twitter)', badge: 'EN Social', kind: 'en', submitUrl: 'https://x.com/compose/post', file: '09-short-video-social.md', title: 'Termexo Fleet v0.1.1 Launch Thread', media: '附带：termexo-fleet-promo.mp4' },
+      { id: 'weibo', name: '微博', badge: '中文短帖', kind: 'video', submitUrl: 'https://weibo.com/', file: '09-short-video-social.md', title: 'Termexo Fleet v0.1.1 发布短帖', media: '附带：termexo-fleet-promo-vertical.mp4' },
+    ];
+
+    const STORE_KEY = 'termexo_fleet_v011_promo_done';
+    const doneMap = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    const fileCache = {"01-oschina.md":"# Termexo Fleet v0.1.1 发布：本地优先的多机 AI 编程舰队指挥中枢\n\nTermexo Fleet v0.1.1 现已发布。Termexo Fleet 是 MIT 开源的本地桌面端多 Agent 调度中枢，用于将本机、局域网或 Tailscale VPN 内的多台 [Termexo](https://github.com/gemron/Termexo) 桌面实例编排成一套“零黑盒”的 AI 编程舰队。\n\n> 维护者声明：本文由 Termexo Fleet 项目维护者提交，使用 AI 辅助整理，内容已对照 v0.1.1 正式发行说明与源码核对。配图与演示视频均基于新版桌面端真实构建采集，示例工作流用于说明功能边界，不代表所有第三方模型与 CLI 在任意环境下的实机联调保证。\n\n![Termexo Fleet 任务指挥甲板与路由预判](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/01-mission-deck.png)\n\n## 解决什么问题\n\n当开发者在多台电脑、多个账号上同时运行 Claude Code、Codex CLI、OpenCode、Pi Agent 等编程 Agent 时，通常会遇到四个实际痛点：\n\n1. **额度分配粗放**：改文档、补注释等轻量任务也交给最贵的旗舰推理模型，消耗大量高阶配额。\n2. **限流与报错需人工盯守**：遇到 `429` 限流、`402` 余额不足或登录过期时，任务直接停摆。\n3. **单一模型自写自审存在盲区**：由同一模型家族编写并审查核心并发或安全逻辑，容易漏掉同源偏好问题。\n4. **黑盒编排难以介入**：隐藏在脚本或后台 API 循环里的多 Agent 看不到实时终端状态，卡在审批或异常交互时接管成本高。\n\n## 核心能力（v0.1.1）\n\n- **零黑盒透明执行**：所有父任务与子 Agent 均在真实 Termexo PTY 终端和任务看板中运行。在指挥面板点击任意节点的「实时终端」即可滑出终端抽屉查看实时输出，并通过快捷回复栏（如 `同意 (y)` / `拒绝 (n)`）或命令行直接交互。\n- **L1–L4 智能难度天梯与异构交叉审**：支持 `省钱 / 均衡 / 质量` 三档策略与实时路由预判。轻量改动命中低成本快速模型（L1），架构攻坚调度旗舰推理模型（L3）；进入 **L4 安全/合并审查** 时，路由器会自动排除上游作者所使用的模型家族（例如 Claude 实现 → Codex 独立复核）。\n- **反向 MCP 自主派生子 Agent 蜂群**：内置本地 Streamable HTTP 反向 MCP 服务（`127.0.0.1:7425/mcp`，OS Keyring Bearer 鉴权），向已连接的父 Agent 暴露 `fleet_submit_plan`、`fleet_spawn_subagent` 等 7 个编排工具。每个子 Agent 自动在独立 Git Worktree 分支隔离执行，并受递归深度、并发槽位与总派生预算护栏约束。\n- **多机星型拓扑与自动容灾**：支持按标签亲和调度本机与局域网 / Tailscale 节点（如 Windows 主力机 + Mac Studio 构建机）。实时识别限流与错误信号，自动冷却故障槽位、切换健康账号并在重试时升档。\n- **本地 SQLite 效能账本与多通道告警**：全部状态与执行记录落盘在本地 `termexo-fleet.db`，可量化对比难度路由相比全量 L3 的算力节省比例，并支持飞书 / 企业微信 / Slack Webhook 及联动 Termexo 微信通知。\n\n## 跨平台安装与快速体验\n\nv0.1.1 通过 GitHub Actions 提供 Windows x64（EXE/MSI）、macOS（Apple Silicon `aarch64` 与 Intel `x64` DMG）及 Linux x64（AppImage/DEB）安装包，并合入统一 npm 包：\n\n```bash\n# Node.js 18.18+ 环境一行启动，自动匹配当前系统架构\nnpx termexo-fleet@latest\n```\n\n### 使用前提与当前边界\n\n- Termexo Fleet 是调度控制面，需配合至少一台运行中的 Termexo 实例使用，各 Agent 自身的 CLI、账号与模型服务需由用户另行准备。\n- Windows 安装包目前尚未进行商业代码签名；macOS 采用 ad-hoc 临时签名且未公证，首次启动可能需要在“系统设置 → 隐私与安全性”中允许运行。\n- 欢迎开发者试用、提交 Issue 或反馈多机实战场景；如果对你的多 Agent 工作流确有帮助，欢迎前往 GitHub 点亮 Star。\n\n- 正式发行与下载：<https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- 项目源码：<https://github.com/gemron/Termexo-Fleet>\n- 官网展示与 45 秒演示视频：<https://www.termexo.com/#fleet>\n- npm 包：<https://www.npmjs.com/package/termexo-fleet>\n","02-zhihu.md":"# 多账号、多机器跑 Claude Code / Codex 时，如何做到“既省额度又零黑盒”？\n\n同时用几个编程 Agent 干活久了，很容易遇到四件让人分心的事：改个 README 错别字也烧着最贵的推理模型额度；跑着跑着触发 `429` 限流得自己切号重来；同一个模型自己写并发代码又自己做 Review，死锁照样漏掉；更麻烦的是，市面上很多多 Agent 编排脚本把执行藏在黑盒 API 循环里，一卡在权限确认或异常输出就无从接管。\n\n我是 **Termexo Fleet** 的维护者。本文由 AI 辅助撰写，内容均对照 `v0.1.1` 正式发行版本与 Rust 核心代码核对；文中界面截图来自项目真实构建。示例工作流用于说明设计取舍与使用方式，不替代各平台与各模型 CLI 的实机验收。\n\n![Termexo Fleet 难度天梯与账号池](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/04-routing-ladder.png)\n\n## 1. 为什么坚持“零黑盒 PTY”而不是黑盒 API 编排？\n\n很多多 Agent 框架直接调模型 HTTP API 自己在后台循环工具调用。这种方式做 Demo 很顺，但进入真实工程仓库后，两个问题会立刻放大：\n\n- **上下文不可见**：Agent 到底卡在 `cargo test` 编译、等待交互式输入，还是进入了死循环，只看摘要日志很难判断。\n- **人工介入成本高**：你想中途补一句约束或者敲一个 `y` 放行工具调用，却没有真实的交互终端可以接管。\n\nTermexo Fleet 把 **执行面** 完整留给 [Termexo](https://github.com/gemron/Termexo) 的真实 PTY 终端，自己只做一层轻量、本地优先的 **Rust 调度控制面**。每个任务和子 Agent 都有可见的真实终端，在指挥台点开「实时终端」抽屉就能直接旁观输出、一键回复或随时中止。\n\n![滑出式实时终端抽屉](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/02-terminal-drawer.png)\n\n## 2. 用 L1–L4 难度天梯把算力花在刀刃上\n\n不是所有任务都需要最贵的模型。Termexo Fleet 在派发前会对任务做复杂度分级（也可手动锁定），配合 `省钱 / 均衡 / 质量` 策略与 **实时路由预判条**，按下 `Ctrl+Enter` 前就能看到落到哪台机器、哪个账号和模型：\n\n- **L1 闪电（`1u`）**：文档润色、注释、格式化、只读扫描 → 命中低成本高速槽位（如 DeepSeek Flash / Mini / Haiku）。\n- **L2 标准（`3u`）**：常规功能开发、修 Bug、单测补齐 → 兼顾速度与节点余量。\n- **L3 攻坚（`8u`）**：架构重构、并发死锁排查、数据库迁移 → 分配顶级推理模型（如 Claude Opus / GPT-5.4）。\n- **L4 异构交叉审（`8u`）**：安全审计与合并门禁 → **自动排除上游作者使用的模型家族**（例如 Claude 写的实现，强制交给 Codex / OpenAI 家族做独立复核）。\n\n任务结束后，本地 SQLite 效能账本会记录真实耗时与成本单位，并与“全量跑 L3”的基准对比，方便量化路由到底省了多少算力。\n\n## 3. 反向 MCP 自主蜂群：给 Agent 派活，但必须装护栏\n\n如果允许父 Agent 无限嵌套派生子 Agent，很快就会出现“死循环烧 Token + 工作区文件互相踩踏”。\n\nTermexo Fleet 内置本地反向 MCP 服务（`127.0.0.1:7425/mcp`，Bearer Token 存于操作系统 Keyring），把 `fleet_submit_plan` 和 `fleet_spawn_subagent` 暴露给父 Agent 的同时，在控制面强制执行三道护栏：\n\n1. **DAG 环检测**：通过 Kahn 拓扑算法先校验无环，再放行 Stage 1。\n2. **独立 Git Worktree 隔离**：每个子 Agent 运行在专属分支和 Worktree，互不污染工作区。\n3. **递归深度、并发水位与总预算上限**：同时带重复目标防重锁，避免失控派生。\n\n![子 Agent 蜂群树与护栏水位](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/03-swarm-tree.png)\n\n## 4. 如何本地试用与当前边界\n\n项目完全 MIT 开源、本地优先（无云端锁定），已支持 Windows x64、macOS（Apple Silicon & Intel）与 Linux x64：\n\n```bash\nnpx termexo-fleet@latest\n```\n\n也可以直接从 GitHub Releases 下载原生桌面安装包。几点客观前提提前说明：\n\n- 需要配合本机或局域网/Tailscale 内运行中的 Termexo，以及你已登录的 Agent CLI（如 Claude Code、Codex CLI、OpenCode 等）。\n- Windows 安装包目前未做商业签名，macOS 为 ad-hoc 临时签名（首次打开需在隐私与安全性中放行）。\n- 多 Agent 并行并不能自动保证代码质量，建议先从单个本地节点、一条简单的三阶段流水线（实现 → 单测 → L4 审查）跑通，再逐步接入多机。\n\n欢迎试用并提 Issue 讨论多机调度与路由策略的改进空间，如果项目对你的研发流程确有帮助，欢迎点个 Star 支持。\n\n- GitHub 源码：<https://github.com/gemron/Termexo-Fleet>\n- v0.1.1 下载：<https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- 45 秒官网演示：<https://www.termexo.com/#fleet>\n","03-juejin.md":"# 用 Rust + Tauri 2 + 反向 MCP 搭建多机 AI 编程调度中枢：Termexo Fleet 工程实践\n\n> 维护者说明：我是 Termexo Fleet 的作者与维护者。本文由 AI 辅助整理，基于 `v0.1.1` 实际 Rust Workspace 代码与前端构建核对。文中所有架构描述对应仓库真实实现，不夸大未实机覆盖的场景。\n\n在同时使用 Claude Code、Codex CLI、OpenCode 等多个本地编程 Agent 时，单机多标签很快会遇到调度瓶颈：如何按难度分配不同模型账号？遇到 `429` 限流如何自动切号重试？Windows 主力机和局域网 Mac 构建机如何协同跑同一条流水线？\n\n为了解决这些问题，我们用 **Rust Workspace + Tauri 2 + Angular 22** 做了 MIT 开源的本地控制面 **Termexo Fleet**（已发布 `v0.1.1`）。本文拆解其中五个核心工程设计。\n\n![Termexo Fleet 多机拓扑与调度](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/05-fleet-topology.png)\n\n## 一、Workspace 分层架构：将控制面与执行面解耦\n\nTermexo Fleet 不重新造一套 PTY 终端或黑盒 Agent 运行时，而是通过双向 Streamable HTTP MCP 编排一台或多台 [Termexo](https://github.com/gemron/Termexo) 桌面实例：\n\n```text\nTermexo-Fleet/\n├── crates/\n│   ├── fleet-protocol/      # 领域模型、路由策略、账本与通知协议\n│   ├── fleet-connector/     # 正向 Streamable HTTP MCP 客户端、健康探活与终端信号分类器\n│   ├── fleet-router/        # L1-L4 难度评估、标签亲和路由、L4 跨模型家族过滤\n│   ├── fleet-orchestrator/  # Kahn DAG 校验、护栏水位、上游上下文交接、Git Worktree 隔离\n│   └── fleet-mcp-server/    # Axum 反向 MCP Server（127.0.0.1:7425/mcp + Bearer 鉴权）\n├── src-tauri/               # Tauri 2 桌面宿主、SQLite 账本、OS Keyring、多通道告警\n└── apps/desktop-ui/         # Angular 22 + Tailwind 4 无边框暗色指挥台（6 视图 + Ctrl+K）\n```\n\n这样做的好处是：**核心路由与编排逻辑完全独立于 UI 与宿主框架**，所有状态落盘到本地 SQLite（`termexo-fleet.db`），访问令牌全部存入系统 Keyring（Windows Credential Manager / macOS Keychain / Linux Secret Service），不落明文配置。\n\n## 二、L1–L4 难度路由与 L4 异构审查过滤器\n\n在 `fleet-router` 中，每个待派发任务会结合语义特征与策略模式（`cost` / `balanced` / `quality`）映射为四个档位：\n\n| 档位 | 典型场景 | 成本基准 | 路由关键约束 |\n| --- | --- | --- | --- |\n| `L1` | 文档、注释、格式化、只读检索 | `1u` | 优先命中低成本高速槽位 |\n| `L2` | 常规功能开发、Bug 修复、单元测试 | `3u` | 兼顾质量与节点空闲并发 |\n| `L3` | 架构重构、并发死锁、关键迁移 | `8u` | 锁定旗舰推理模型槽位 |\n| `L4` | 安全审计、合并门禁、高风险 Diff 复核 | `8u` | **强制过滤上游作者模型家族**（如 `!= anthropic`） |\n\n配合前端的「实时路由预判条」和「交互式路由模拟器」，用户在真正执行前即可确认落点节点、账号和档位。\n\n## 三、终端信号分类与自愈容灾\n\n`fleet-connector` 会持续读取目标 Termexo 终端输出并进行轻量分类：\n\n- 识别到 `429 RateLimited`、`402/422 ApiError` 或 `AuthExpired` 时，将故障账号槽位自动打入 5 分钟冷却期，把任务无缝改派到其他健康槽位，并在重试时支持自动升档（`L1 → L2 → L3`）。\n- 识别到 `WaitingApproval` 时，不会盲目重试，而是推送到「全局待办收件箱」并触发飞书 / 企微 / Slack / 微信告警，开发者点开滑出式终端抽屉即可直接点 `同意 (y)` 放行。\n\n## 四、反向 MCP 自主蜂群与三层护栏\n\n通过任务级注入本地反向 MCP（`:7425/mcp`），父 Agent 可以主动调用 `fleet_submit_plan` 或 `fleet_spawn_subagent` 拆分并行子任务。为防止递归失控，`fleet-orchestrator` 强制执行：\n\n1. **Kahn 拓扑排序验环**：拒绝任何带环依赖的 DAG 计划。\n2. **Git Worktree 隔离**：每个派生子 Agent 自动分配独立分支与工作树，避免并发改同一文件导致冲突。\n3. **深度 / 并发 / 预算护栏**：可配 `maxDepth`、`maxConcurrency`、`maxSubagents` 及相同目标防重锁。\n\n## 五、一套 GitHub Actions 打通三端原生安装包 + 统一 npm 分发\n\n参考 Termexo 的发布链路，我们在 CI 中同时编译 Windows x64、macOS（`aarch64` + `x64`）与 Linux x64 原生桌面包，并合入单个 npm 包 `termexo-fleet`：\n\n```bash\nnpx termexo-fleet@latest\n```\n\n启动器根据 `process.platform` 与 `process.arch` 自动解压缓存并拉起对应原生桌面应用（Node.js 18.18+ 即可免配置 Rust 环境直接运行）。\n\n> 当前边界提示：需搭配本机或局域网中的 Termexo 实例及各 Agent 自身的 CLI/账号使用；Windows 安装包尚未商业签名，macOS 为 ad-hoc 临时签名，首次打开可能需在系统隐私设置中允许。\n\n欢迎有兴趣的同学查看 Rust 源码、试用或提交 PR / Issue 交流多 Agent 调度实践；如果对你有启发，欢迎点个 Star。\n\n- 仓库地址：<https://github.com/gemron/Termexo-Fleet>\n- v0.1.1 Release：<https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- 官网与演示视频：<https://www.termexo.com/#fleet>\n","04-csdn.md":"# Termexo Fleet v0.1.1 上手指南：跨平台安装、多机调度与 L1–L4 模型路由配置\n\n> 作者说明：我是 Termexo Fleet 项目维护者。本文由 AI 辅助整理，已依据 v0.1.1 正式发行说明与桌面端构建逐项核对；文中截图均来自项目真实桌面构建。\n\n如果你已经在本机或局域网多台电脑上使用 Claude Code、Codex CLI、OpenCode 等编程 Agent，想要把多个账号和机器统一调度起来，同时保留实时终端可控性，可以试试开源本地桌面应用 **Termexo Fleet**（MIT 协议）。\n\n![Termexo Fleet 效能账本与多通道通知](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/06-analytics-notify.png)\n\n## 一、安装方式（Windows / macOS / Linux）\n\n### 方式 1：通过 npm 一行启动（推荐，需 Node.js 18.18+）\n\n```bash\nnpx termexo-fleet@latest\n```\n\n同一个 npm 包内已包含三平台二进制入口，会自动识别 Windows x64、macOS（Apple Silicon / Intel）与 Linux x64 并缓存拉起原生桌面程序，无需本地安装 Rust 工具链。\n\n### 方式 2：下载原生桌面安装包\n\n前往 [GitHub Releases v0.1.1](https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1) 选择对应平台文件：\n\n- **Windows x64**：EXE（NSIS）或 MSI 安装包（需 Windows 10+ 与 WebView2）\n- **macOS Apple Silicon (M 系列)**：`aarch64.dmg`\n- **macOS Intel**：`x64.dmg`\n- **Linux x64**：`.AppImage` 或 `.deb`\n\n> 签名与权限说明：Windows 安装包当前尚未进行商业代码签名；macOS 采用 ad-hoc 临时签名、尚未公证，首次启动可能需要在“系统设置 → 隐私与安全性”中手动允许。\n\n## 二、5 分钟跑通第一个多阶段任务\n\n### 第 1 步：连接本机或局域网 Termexo 节点\n\n1. 确保本机（或局域网/Tailscale 内另一台机器）已运行 [Termexo](https://github.com/gemron/Termexo) 并开启 MCP 服务（默认端口 `7421`）。\n2. 在 Termexo Fleet 顶部点击 **「+ 连接 Termexo」**，填入节点地址与 Access Token（Token 加密存入系统 Keyring）。\n3. 可为节点打上标签（例如 `#windows`、`#macos`、`#gpu`），用于后续按平台亲和调度。\n\n### 第 2 步：在「难度天梯与账号池」配置 L1–L4 分工\n\n进入左侧 **「难度天梯与账号池」**（快捷键 `Alt+4`）：\n\n- 给每个已发现的模型账号槽位勾选它承接的难度档位（`L1` 轻量闪电、`L2` 标准开发、`L3` 架构攻坚、`L4` 异构交叉审）。\n- 顶部提供 **实时路由模拟器**，点击预设样例或输入一句话，立即预览会被分到哪台机器的哪个模型。\n\n### 第 3 步：在「任务指挥甲板」下发三段式流水线\n\n回到 **「任务指挥甲板」**（`Alt+1`）：\n\n1. 选择「三段式流水线（实现 → 测试验证 → L4 异构审）」，输入需求目标。\n2. 观察底部 **实时路由预判条** 确认命中模型后，按 `Ctrl+Enter` 启动。\n3. 在下方可视化 DAG 流水线中，点击任意节点的 **「实时终端」** 即可滑出真实 PTY 终端抽屉，随时查看输出或点击 `同意 (y)` 放行审批。\n\n### 第 4 步：查看省费账本与配置告警通知\n\n在 **「效能账本与通知」**（`Alt+6`）中可以查看：\n\n- 任务成功率、平均耗时、容灾切号次数，以及相比全量 L3 模型的估算算力节省比例；\n- 飞书 / 企业微信 / Slack / 自定义 JSON Webhook 推送，以及联动在线 Termexo 节点的微信通知转发。\n\n日常使用建议搭配 `Ctrl+K` 打开全局命令面板，快速切换 6 个视图或直达实时终端。\n\n## 三、注意事项\n\n- Termexo Fleet 不内置大模型 API 额度，也不替代各 Agent 自身的 CLI，用户需自行准备并登录所使用的编程 Agent CLI。\n- 局域网跨机连接建议配合内网或 Tailscale VPN，并妥善保管 Access Token。\n\n欢迎下载试用并在 GitHub 反馈问题或建议，如果对你的日常开发确实有帮助，欢迎给仓库点个 Star。\n\n- GitHub 源码：<https://github.com/gemron/Termexo-Fleet>\n- 安装包下载：<https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- 45 秒功能演示：<https://www.termexo.com/#fleet>\n","05-segmentfault.md":"# 为什么多 Agent 编程编排容易失控？我们在 Termexo Fleet 里的 4 个架构取舍\n\n> 说明：我是 Termexo Fleet 维护者。本文由 AI 辅助整理，依据 `v0.1.1` 实际源码与发行文档核对，重点复盘多 Agent 本地编排的设计取舍与边界。\n\n过去几个月，多 Agent 编程编排工具层出不穷，但真正用到日常研发仓库时，很多人会退回到手动开几个终端窗口。原因往往不是“模型不够强”，而是编排层缺少工程可观测性与成本边界。\n\n在构建开源本地调度中枢 **Termexo Fleet**（Rust + Tauri 2 + Angular 22，MIT 协议）的过程中，我们做了 4 个反直觉但非常务实的架构取舍。\n\n![Termexo Fleet 全局命令面板与任务视图](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/07-command-palette.png)\n\n## 取舍 1：放弃自建黑盒 Agent Loop，坚持“控制面 + 真实 PTY 执行面”\n\n把工具调用全部藏在后台 API 循环里，看似统一，却丢掉了真实终端里最宝贵的排错信息与人工接管能力。\n\nTermexo Fleet 选择把 [Termexo](https://github.com/gemron/Termexo) 作为透明执行面：所有派发的任务与子 Agent 都在真实 PTY 终端里跑，Fleet 只通过 Streamable HTTP MCP 下发任务、采集信号、调度依赖。一旦需要人工介入，直接在滑出式终端抽屉里就能读取原文并发送输入。\n\n## 取舍 2：路由不是只选“最贵模型”，而是引入 L4 跨模型家族排斥\n\n多数路由逻辑只关心吞吐和价格，但在代码审查场景里，**同源盲区**比价格更致命。\n\n我们在 `fleet-router` 中把难度天梯拆为 `L1–L4`：日常修改尽量落到 `L1/L2` 控制成本，而在 `L4`（安全与边界交叉审）阶段强制记录上游实现节点的 `modelFamily`，选槽时主动排除同家族模型（如 Claude 实现 → Codex 独立审计）。这不是玄学“越贵越好”，而是把成本预算从简单任务转移到高价值复核上。\n\n## 取舍 3：允许父 Agent 自主派生子 Agent，但用硬护栏替代“口头 Prompt 约束”\n\n只靠 System Prompt 叮嘱 Agent “不要无限拆分子任务”在复杂仓库里并不可靠。\n\nTermexo Fleet 通过本地反向 MCP（`127.0.0.1:7425/mcp`）开放 `fleet_submit_plan` 与 `fleet_spawn_subagent`，但所有安全边界都在 Rust 编排器里硬编码校验：\n\n- **Kahn 算法验环**：有环 DAG 直接拒绝，避免死锁等待。\n- **Git Worktree 隔离**：派生子 Agent 自动进入独立工作树分支，避免并发写冲突。\n- **水位护栏**：强制限制 `maxDepth`、`maxConcurrency`、`maxSubagents` 及重复子目标锁。\n\n## 取舍 4：全量状态本地化与 OS Keyring 凭据隔离\n\n多机、多账号场景涉及大量 Access Token 与代码仓库摘要，上传云端 SaaS 会带来额外的合规与隐私成本。因此 Fleet 的路由策略、DAG 状态、效能账本全部留在本地 SQLite（`termexo-fleet.db`），节点令牌与反向 MCP Bearer Token 统一托管给操作系统原生 Keyring。\n\n## 当前局限与适用边界\n\n这套架构也有明确前提，提前写清楚避免误解：\n\n1. **强依赖真实执行节点**：至少需要一台运行中的 Termexo，且各 Agent CLI 与账号需自行配置。\n2. **安装包签名仍在推进**：Windows 安装包目前未商业签名，macOS 为 ad-hoc 临时签名（首次运行需在系统隐私设置中放行）。\n3. **复杂跨机任务仍需人工把关**：自动容灾（`429/402` 冷却切号）能减少人工盯屏，但关键代码合并前依然建议查看 Diff 与单测结果。\n\n支持 Windows x64 / macOS（Apple Silicon & Intel）/ Linux x64，Node.js 18.18+ 可直接运行 `npx termexo-fleet@latest` 体验。欢迎在 GitHub 讨论多 Agent 编排的工程边界与改进建议。\n\n- 仓库源码：<https://github.com/gemron/Termexo-Fleet>\n- v0.1.1 发行说明：<https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- 官网展示：<https://www.termexo.com/#fleet>\n","06-v2ex.md":"# 开源了一个本地多机 AI 编程 Agent 调度台：Termexo Fleet（支持 L1-L4 难度路由、异构审与实时 PTY 接管）\n\n节点建议：`分享创造`（`https://www.v2ex.com/go/create`）\n\n---\n\n最近自己同时在 Windows 主力机和局域网 Mac 上跑 Claude Code、Codex CLI 和 OpenCode，遇到几个挺实际的问题：\n\n1. 改几行文档和注释也一直烧最贵模型的配额，有点浪费；\n2. 遇到 429 限流或登录过期，任务就卡死在那里等人工切号；\n3. 同一个模型写完并发/安全逻辑又自己做 Review，还是容易漏掉边界问题；\n4. 很多黑盒多 Agent 脚本看不到实时终端，卡在交互确认的时候很难接管。\n\n于是用 Rust + Tauri 2 + Angular 22 做了个本地优先的开源桌面调度控制面 **Termexo Fleet**（MIT 协议，刚发 `v0.1.1`），直接编排本机或局域网里的 Termexo 实例：\n\n- **零黑盒执行**：所有任务和子 Agent 都跑在真实的 Termexo PTY 终端里，点开滑出式终端抽屉随时能看日志，也能直接点 `同意 (y)` 或输入指令接管；\n- **L1–L4 难度天梯**：按复杂度把轻量改动分给低成本快模型（L1），架构重构分给顶级推理模型（L3），L4 审查会自动排除上游作者的模型家族（比如 Claude 写完强制让 Codex 复核）；\n- **反向 MCP 自主蜂群**：内置 `127.0.0.1:7425/mcp`，父 Agent 可以提交多阶段 DAG 或派生子 Agent，自动隔离 Git Worktree，并带递归深度、并发和总预算护栏；\n- **本地 SQLite 账本 & 多通道告警**：记录真实耗时、容灾切号次数和相对全量 L3 的估算省费比例，支持飞书 / 企微 / Slack / 微信提醒。\n\n支持 Windows x64、macOS（Apple Silicon & Intel）和 Linux x64，有 Node.js 18.18+ 的话可以直接一行拉起：\n\n```bash\nnpx termexo-fleet@latest\n```\n\n说明两点前提：需要搭配运行中的 Termexo 与你自己的 Agent CLI/账号使用；目前 Windows 包未做商业签名，macOS 为临时签名（首次打开需在隐私与安全性里允许）。\n\n代码和安装包都在下面，欢迎 v 友试用拍砖，特别是多机调度和路由策略方面的实战建议：\n\n- GitHub: https://github.com/gemron/Termexo-Fleet\n- Release v0.1.1: https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1\n- 45 秒演示视频: https://www.termexo.com/#fleet\n","07-producthunt.md":"# Product Hunt Launch Fields — Termexo Fleet v0.1.1\n\nSubmit URL: <https://www.producthunt.com/posts/new>\n\n## Product Name\n`Termexo Fleet`\n\n## Tagline (<= 60 chars)\n`Local-first AI coding fleet commander with zero black-box`\n\n## Short Description (<= 260 chars)\n`Orchestrate multiple coding agents (Claude Code, Codex CLI, OpenCode) across machines and accounts. Grade tasks L1–L4, force cross-family audits on L4, spawn worktree-isolated sub-agents via reverse MCP, and inspect or reply to every live PTY terminal.`\n\n## Topics\n`Developer Tools` · `Artificial Intelligence` · `Open Source` · `Productivity` · `Mac`\n\n## Links\n- Website: `https://www.termexo.com/#fleet`\n- GitHub: `https://github.com/gemron/Termexo-Fleet`\n- Release v0.1.1: `https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1`\n- npm: `https://www.npmjs.com/package/termexo-fleet`\n\n## Media Assets to Upload\n1. **Product Demo Video (16:9 1080p60, 45s)**: `D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo.mp4`\n2. **Hero Cover Thumbnail**: `D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-cover.png`\n3. **Gallery Screenshots**: `docs/preview/screenshots/01-mission-deck.png` through `07-command-palette.png`\n\n---\n\n## First Maker Comment (Ready to Paste)\n\nHi Product Hunt! I'm the maintainer of **Termexo Fleet** (MIT open-source, built with Rust, Tauri 2, and Angular 22).\n\n*(Disclosure: This launch note was drafted with AI assistance and verified directly against the v0.1.1 source and release notes. All screenshots and the 45-second video are captured from the real desktop build.)*\n\nRunning Claude Code, Codex CLI, and OpenCode across multiple accounts and machines (like a Windows workstation + a LAN Mac Studio) quickly surfaced four pain points for me:\n\n1. **Burning flagship quota on trivial edits** (README fixes, comments, lint sweeps).\n2. **Manual baby-sitting on `429` rate limits** or expired logins.\n3. **Single-model blind spots** when the same model family writes and reviews critical concurrency or security changes.\n4. **Black-box orchestrators** that hide terminal execution and make human approval or mid-flight steering painful.\n\n**Termexo Fleet v0.1.1** sits on top of one or more [Termexo](https://github.com/gemron/Termexo) desktops as a transparent, local-first control plane:\n\n- **Zero Black-Box Live Terminal Drawer**: Every task and sub-agent runs inside a real Termexo PTY terminal. Click any DAG node to watch live output or click `Approve (y)` right from the drawer.\n- **L1–L4 Difficulty Ladder & Cross-Family L4 Audits**: Preview the exact node, account, and model before dispatching. `L1` routes routine edits to fast low-cost slots; `L4` automatically excludes the upstream author's model family (e.g., Claude implements → Codex independently reviews).\n- **Reverse MCP Sub-Agent Swarms (`127.0.0.1:7425/mcp`)**: Parent agents can submit multi-stage DAGs (validated with Kahn's algorithm) and spawn child agents isolated in separate Git Worktrees under strict depth, concurrency, and budget guardrails.\n- **Local SQLite Ledger & Self-Healing Failover**: Auto-cools down failing `429/402` slots, escalates retries, quantifies estimated savings vs. all-L3 usage locally, and dispatches Feishu / WeCom / Slack / WeChat alerts.\n\n### Try It Locally\nWindows x64, macOS (Apple Silicon & Intel), and Linux x64 builds are bundled into one npm package (Node.js 18.18+):\n\n```bash\nnpx termexo-fleet@latest\n```\n\n**Current caveats**: Requires at least one running Termexo instance plus your own coding-agent CLIs/accounts. Windows installers are currently unsigned and macOS builds use ad-hoc signing (you may need to allow first launch in Privacy & Security).\n\nI'd love feedback from anyone running multi-agent or multi-machine coding setups — especially on routing heuristics and guardrail defaults!\n\n[GitHub](https://github.com/gemron/Termexo-Fleet) · [v0.1.1 Releases](https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1) · [45s Tour](https://www.termexo.com/#fleet)\n","08-medium.md":"# Orchestrating Multi-Machine Coding Agents Without a Black Box: Inside Termexo Fleet v0.1.1\n\n*Maintainer note: I maintain Termexo Fleet. This article was written with AI assistance and verified directly against the v0.1.1 Rust workspace, Angular UI, and release notes. All screenshots are captured from the real desktop build. This post is published free without a paywall.*\n\n![Termexo Fleet Mission Deck and Live Route Forecast](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/01-mission-deck.png)\n\nIf you run multiple coding agents — Claude Code, Codex CLI, OpenCode, or Pi Agent — across more than one account or machine, manual window juggling stops scaling quickly.\n\nSending documentation tweaks to flagship reasoning models drains top-tier quota. Hitting a `429` rate limit stalls an unattended run until you switch accounts by hand. Letting the same model family both write and review concurrent code leaves systematic blind spots. And most multi-agent frameworks hide execution behind headless API loops, stripping away the live terminal visibility you actually need when a run pauses for approval.\n\n**Termexo Fleet v0.1.1** (MIT open-source, built with Rust, Tauri 2, and Angular 22) takes a different approach: keep real PTY terminals as the transparent execution plane and add a local-first orchestration control plane on top.\n\n## 1. Zero Black-Box Execution\n\nInstead of re-implementing an opaque agent loop, Termexo Fleet connects over Streamable HTTP MCP to one or more [Termexo](https://github.com/gemron/Termexo) desktop instances — on your local machine, over LAN, or across Tailscale VPN.\n\nEvery mission node and spawned sub-agent runs inside a visible Termexo terminal. From the Fleet dashboard, opening the slide-over **Live Terminal Drawer** shows raw PTY output and lets you send quick approvals (`y`, `n`, continue) or arbitrary commands directly to the running agent.\n\n![Slide-over Live Terminal Drawer](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/02-terminal-drawer.png)\n\n## 2. L1–L4 Difficulty Routing & Cross-Family L4 Audits\n\nBefore you dispatch a task (`Ctrl+Enter`), Fleet's **Live Route Forecast** evaluates complexity across four tiers (`L1` Flash, `L2` Standard, `L3` Deep, `L4` Cross-Review) under `cost`, `balanced`, or `quality` policy:\n\n- **`L1` (1u)** handles comments, docs, formatting, and read-only scans on low-cost fast slots.\n- **`L2` (3u)** handles routine feature work, bug fixes, and test suites.\n- **`L3` (8u)** reserves flagship reasoning slots for architecture refactors and concurrency fixes.\n- **`L4` (8u)** enforces **cross-family review**: Fleet tracks the upstream author's `modelFamily` and excludes that family when selecting a reviewer (e.g., Claude implementation → Codex security review).\n\nWhen terminal output signals `429 RateLimited`, `402/422 ApiError`, or `AuthExpired`, Fleet places the affected slot into a 5-minute cooldown and re-routes the task to a healthy slot, escalating tier on retry when needed.\n\n## 3. Reverse MCP Sub-Agent Swarms with Hard Guardrails\n\nTermexo Fleet runs a local reverse MCP endpoint (`127.0.0.1:7425/mcp`) authenticated by a Bearer token stored in your OS Keyring. Parent agents receive 7 orchestration tools (`fleet_submit_plan`, `fleet_spawn_subagent`, `fleet_wait_subagents`, etc.), bounded by Rust-enforced guardrails rather than prompt suggestions:\n\n- **Kahn's algorithm acyclicity validation** before any DAG plan dispatches Stage 1.\n- **Automatic Git Worktree isolation** so parallel child agents never trample the same working tree.\n- **Hard caps** on recursion depth (`maxDepth`), active child concurrency (`maxConcurrency`), total sub-agent budget (`maxSubagents`), and duplicate-goal locks.\n\n![Sub-Agent Swarm Tree and Guardrail Gauges](https://raw.githubusercontent.com/gemron/Termexo-Fleet/main/docs/preview/screenshots/03-swarm-tree.png)\n\n## 4. Local SQLite Ledger & Cross-Platform Single-Command Launch\n\nAll routing policies, execution history, and estimated savings vs. all-`L3` baselines live locally in `termexo-fleet.db`. Multi-channel alerts support Feishu, WeCom, Slack, custom JSON webhooks, and bridged Termexo WeChat notifications.\n\nv0.1.1 ships Windows x64, macOS (Apple Silicon & Intel), and Linux x64 builds both as native installers on GitHub Releases and bundled inside a single npm launcher (Node.js 18.18+):\n\n```bash\nnpx termexo-fleet@latest\n```\n\n### Practical Prerequisites & Current Limitations\n\n- Termexo Fleet is a control plane: you still need at least one running Termexo instance plus your own agent CLIs, model accounts, and API/subscription access.\n- Windows installers are currently unsigned, and macOS builds use ad-hoc signing without notarization (first launch may require approval in Privacy & Security).\n- Automated failover and cross-family audits reduce manual baby-sitting, but human diff and test verification remain essential before merging critical code.\n\nSource code, installers, and the 45-second tour are open under the MIT license:\n\n- GitHub: <https://github.com/gemron/Termexo-Fleet>\n- Release v0.1.1: <https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1>\n- Product Showcase: <https://www.termexo.com/#fleet>\n","09-short-video-social.md":"# 短视频与社交媒体全平台发布包（Termexo Fleet v0.1.1）\n\n> 成片素材路径：\n> - **9:16 手机竖屏大字版视频**：`D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-vertical.mp4`（`1080×1920 @ 60fps · 45s`）\n> - **9:16 竖屏封面**：`D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-vertical-cover.png`\n> - **16:9 横屏高清视频**：`D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo.mp4`（`1920×1080 @ 60fps · 45s`）\n> - **16:9 横屏封面**：`D:\\devlop\\Termexo-Fleet\\docs\\promo\\termexo-fleet-promo-cover.png`\n\n---\n\n## 1. 抖音 / 微信视频号 / 小红书（上传 9:16 竖屏大字版视频）\n\n### 推荐标题（任选 1 条）\n- 开源了一个本地 AI 编程舰队指挥台：多账号自动切号、L1–L4 省费路由、Claude 写完自动叫 Codex 异构审\n- 跑 Claude Code 和 Codex 总被限流烧额度？我用 Rust 写了个零黑盒的多机调度台（MIT 开源）\n- 多台电脑一起跑 AI 编程 Agent！45 秒看懂本地优先、零黑盒的 Termexo Fleet\n\n### 正文简介\n同时用 Claude Code、Codex CLI、OpenCode 跑多账号和多台机器，最怕烧额度、429 限流中断和黑盒看不到终端。\n这是我维护的 MIT 开源桌面端调度中枢 **Termexo Fleet v0.1.1**（Rust + Tauri 2）：\n- 零黑盒真实 PTY 终端：随时点开实时日志，一键 `同意 (y)` 放行审批\n- L1–L4 难度天梯：轻量改文档走低成本模型，安全审查强制跨模型家族（Claude 写 → Codex 审）\n- 反向 MCP 自主派生子 Agent 蜂群：独立 Git Worktree 隔离 + 深度预算护栏\n- 支持 Windows / macOS / Linux，一行命令即可体验：`npx termexo-fleet@latest`\n（注：需搭配本地/局域网 Termexo 与自有 Agent CLI 账号使用）\n\n### 置顶评论（发完立刻自评置顶）\n开源仓库搜 GitHub：`gemron/Termexo-Fleet`\n官网演示与下载：`termexo.com/#fleet`\nNode.js 18.18+ 一行体验：`npx termexo-fleet@latest`\n欢迎提 Issue 反馈多机实战问题，觉得有用点个 Star 鼓励一下！\n\n### 话题标签\n`#AI编程` `#ClaudeCode` `#Codex` `#开源项目` `#程序员工具` `#多Agent` `#MCP` `#Rust` `#效率工具`\n\n---\n\n## 2. B 站 / YouTube（上传 16:9 横屏 1080p60 视频）\n\n### B 站标题\n【MIT 开源】本地多机 AI 编程舰队指挥中枢 Termexo Fleet v0.1.1：零黑盒终端、L1–L4 路由与异构交叉审\n\n### 分区与标签\n- 分区：`科技 → 软件应用`（或 `计算机技术`）\n- 标签：`AI编程`、`Claude Code`、`Codex`、`开源软件`、`MCP`、`多Agent`、`Rust`、`Tauri`、`程序员`、`效率工具`\n\n### 简介与章节时间轴\n我是 Termexo Fleet 维护者，这是一个基于 Rust + Tauri 2 + Angular 22 的本地优先 AI 编程多机调度中枢（MIT 开源），现已发布 v0.1.1，支持 Windows x64 / macOS（Apple Silicon & Intel）/ Linux x64。\n\n- 一行启动：`npx termexo-fleet@latest`（Node.js 18.18+）\n- GitHub 仓库：https://github.com/gemron/Termexo-Fleet\n- v0.1.1 下载：https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1\n- 官网展示：https://www.termexo.com/#fleet\n\n时间轴：\n00:00 多账号多机器跑 AI 编程的 4 个痛点\n00:05 Termexo Fleet 登场\n00:09 任务指挥甲板、实时路由预判与三阶段 DAG 流水线\n00:17 零黑盒滑出式 PTY 终端与人工一键放行\n00:22 L1–L4 难度天梯与跨模型家族异构审查\n00:28 反向 MCP 自主子 Agent 蜂群（Git Worktree 隔离）\n00:31 Windows + macOS 多机星型算力拓扑\n00:34 本地 SQLite 效能账本与 Ctrl+K 全局命令面板\n00:39 跨平台获取方式（npx termexo-fleet@latest）\n\n前提说明：需搭配运行中的 Termexo 桌面端及用户自备的 Agent CLI/账号使用；Windows 安装包未商业签名，macOS 为 ad-hoc 临时签名。\n\n---\n\n## 3. X (Twitter) 英文发布帖（配 16:9 或 9:16 45s 视频）\n\n### Tweet 1（主帖）\nJust shipped **Termexo Fleet v0.1.1** — an MIT open-source, local-first desktop commander for orchestrating Claude Code, Codex CLI & OpenCode across machines and accounts.\n\n- Zero black-box: inspect & approve every live PTY terminal\n- L1–L4 difficulty routing + cross-family L4 audits (Claude writes → Codex reviews)\n- Reverse MCP sub-agent swarms in isolated Git Worktrees\n- Self-healing 429 failover + local SQLite cost ledger\n\nWindows, macOS (Apple Silicon & Intel) & Linux in one command:\n`npx termexo-fleet@latest`\n\nGitHub: https://github.com/gemron/Termexo-Fleet\n\n### Tweet 2（自评补充架构与边界）\nBuilt with Rust Workspace + Tauri 2 + Angular 22. All tokens stay in your OS Keyring, all state stays in local SQLite.\n\nNote: requires a running Termexo desktop instance + your own coding-agent CLIs/accounts. Windows installers are currently unsigned and macOS builds use ad-hoc signing.\n\nRelease & downloads: https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1\n45s tour: https://www.termexo.com/#fleet\n\n---\n\n## 4. 微博中文短帖（配 9:16 竖屏视频或 16:9 封面图）\n\n刚发布了 MIT 开源项目 Termexo Fleet v0.1.1，一个本地优先的多机 AI 编程 Agent 调度中枢（Rust + Tauri 2）：\n\n1）零黑盒实时 PTY 终端，随时旁观 Claude Code / Codex 输出并一键放行审批\n2）L1–L4 难度天梯路由：轻量改文档走低成本模型，L4 安全审查自动排除上游作者模型家族（Claude 写 → Codex 审）\n3）反向 MCP 自主派生子 Agent 蜂群，独立 Git Worktree 隔离 + 深度/预算护栏\n4）429 限流自动冷却切号 + 本地 SQLite 效能省费账本\n\n支持 Windows / macOS（M 芯片 & Intel）/ Linux，Node.js 18.18+ 一行体验：npx termexo-fleet@latest\n（需搭配本机或局域网 Termexo 与自有 Agent CLI 使用）\n\nGitHub：https://github.com/gemron/Termexo-Fleet\n演示：https://www.termexo.com/#fleet\n#开源项目# #AI编程# #ClaudeCode# #程序员#\n"};
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(window.__tt);
+      window.__tt = setTimeout(() => el.classList.remove('show'), 2200);
+    }
+
+    async function copyText(text, msg) {
+      await navigator.clipboard.writeText(text);
+      showToast(msg || '已复制到剪贴板');
+    }
+
+    async function loadFile(fname) {
+      if (fileCache[fname]) return fileCache[fname];
+      const res = await fetch(fname);
+      if (!res.ok) throw new Error('请在本地 HTTP 服务下打开或直接打开对应 .md 文件');
+      fileCache[fname] = await res.text();
+      return fileCache[fname];
+    }
+
+    function updateProgress() {
+      const count = 1 + PLATFORMS.filter((p) => doneMap[p.id]).length;
+      document.getElementById('prog-text').textContent = `${count} / ${PLATFORMS.length + 1}`;
+    }
+
+    const root = document.getElementById('cards');
+    for (const p of PLATFORMS) {
+      const card = document.createElement('div');
+      card.className = 'card' + (doneMap[p.id] ? ' done' : '');
+      card.innerHTML = `
+        <div class="card-head">
+          <div class="card-title-group">
+            <input type="checkbox" ${doneMap[p.id] ? 'checked' : ''} data-id="${p.id}" />
+            <span class="plat-name">${p.name}</span>
+            <span class="tag ${p.kind}">${p.badge}</span>
+          </div>
+          <div class="actions">
+            <button data-act="title" data-id="${p.id}">复制标题</button>
+            <button data-act="md" data-file="${p.file}">复制全文 MD</button>
+            ${p.extraUrl ? `<a class="btn" href="${p.extraUrl}" target="_blank" rel="noopener">${p.extraLabel}</a>` : ''}
+            <a class="btn primary" href="${p.submitUrl}" target="_blank" rel="noopener">前往发布页 ↗</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="meta-row"><strong>推荐标题：</strong>${p.title}</div>
+          <div class="meta-row"><strong>建议素材：</strong>${p.media} · 稿件文件 <code>${p.file}</code></div>
+          <details data-file="${p.file}">
+            <summary>展开查看稿件全文</summary>
+            <pre class="preview">加载中...</pre>
+          </details>
+        </div>
+      `;
+      root.appendChild(card);
+
+      card.querySelector('input[type=checkbox]').addEventListener('change', (e) => {
+        doneMap[p.id] = e.target.checked;
+        localStorage.setItem(STORE_KEY, JSON.stringify(doneMap));
+        card.classList.toggle('done', e.target.checked);
+        updateProgress();
+      });
+
+      card.querySelector('button[data-act="title"]').addEventListener('click', () => {
+        copyText(p.title, `已复制 ${p.name} 标题`);
+      });
+
+      card.querySelector('button[data-act="md"]').addEventListener('click', async () => {
+        try {
+          const text = await loadFile(p.file);
+          await copyText(text, `已复制 ${p.name} 完整稿件`);
+        } catch {
+          showToast(`本地 file:// 限制了 fetch，请直接打开同目录 ${p.file} 复制`);
+        }
+      });
+
+      const det = card.querySelector('details');
+      det.addEventListener('toggle', async () => {
+        if (!det.open) return;
+        const pre = det.querySelector('pre');
+        try {
+          pre.textContent = await loadFile(p.file);
+        } catch {
+          pre.textContent = `浏览器安全策略阻止 file:// 读取同目录文件。\n请直接打开：D:\\devlop\\Termexo-Fleet\\docs\\promotion\\v0.1.1-launch\\${p.file}\n或在仓库根目录运行：npx serve docs/promotion/v0.1.1-launch`;
+        }
+      });
+    }
+    updateProgress();
+  </script>
+</body>
+</html>

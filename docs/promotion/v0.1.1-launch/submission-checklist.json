@@ -1,0 +1,114 @@
+{
+  "project": "Termexo Fleet",
+  "version": "0.1.1",
+  "date": "2026-11-28",
+  "sourceRelease": "https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1",
+  "repository": "https://github.com/gemron/Termexo-Fleet",
+  "npm": "https://www.npmjs.com/package/termexo-fleet",
+  "website": "https://www.termexo.com/#fleet",
+  "media": {
+    "videoLandscape": "docs/promo/termexo-fleet-promo.mp4",
+    "coverLandscape": "docs/promo/termexo-fleet-promo-cover.png",
+    "videoVertical": "docs/promo/termexo-fleet-promo-vertical.mp4",
+    "coverVertical": "docs/promo/termexo-fleet-promo-vertical-cover.png"
+  },
+  "channels": {
+    "githubMetadata": {
+      "status": "已完成",
+      "action": "已通过 gh repo edit 配置官网链接与 12 个高意图 Topics 标签",
+      "url": "https://github.com/gemron/Termexo-Fleet"
+    },
+    "oschina": {
+      "status": "待提交",
+      "submitUrl": "https://my.oschina.net/u/223115/blog/write",
+      "newsUrl": "https://www.oschina.net/news/add",
+      "draft": "01-oschina.md",
+      "aiDisclosure": true
+    },
+    "zhihu": {
+      "status": "待提交",
+      "submitUrl": "https://zhuanlan.zhihu.com/write",
+      "draft": "02-zhihu.md",
+      "aiDisclosure": true
+    },
+    "juejin": {
+      "status": "待提交",
+      "submitUrl": "https://juejin.cn/editor/drafts/new",
+      "draft": "03-juejin.md",
+      "aiDisclosure": true
+    },
+    "csdn": {
+      "status": "待提交",
+      "submitUrl": "https://editor.csdn.net/md/",
+      "draft": "04-csdn.md",
+      "aiDisclosure": true
+    },
+    "segmentfault": {
+      "status": "待提交",
+      "submitUrl": "https://segmentfault.com/write",
+      "draft": "05-segmentfault.md",
+      "aiDisclosure": true
+    },
+    "v2ex": {
+      "status": "待提交",
+      "submitUrl": "https://www.v2ex.com/write?node=create",
+      "draft": "06-v2ex.md",
+      "aiDisclosure": false
+    },
+    "producthunt": {
+      "status": "待提交",
+      "submitUrl": "https://www.producthunt.com/posts/new",
+      "draft": "07-producthunt.md",
+      "aiDisclosure": true
+    },
+    "medium": {
+      "status": "待提交",
+      "submitUrl": "https://medium.com/new-story",
+      "draft": "08-medium.md",
+      "aiDisclosure": true
+    },
+    "bilibili": {
+      "status": "待提交",
+      "submitUrl": "https://member.bilibili.com/platform/upload/video/frame",
+      "media": "docs/promo/termexo-fleet-promo.mp4",
+      "draft": "09-short-video-social.md"
+    },
+    "douyin": {
+      "status": "待提交",
+      "submitUrl": "https://creator.douyin.com/creator-micro/content/upload",
+      "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
+      "draft": "09-short-video-social.md"
+    },
+    "wechatChannels": {
+      "status": "待提交",
+      "submitUrl": "https://channels.weixin.qq.com/platform/post/create",
+      "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
+      "draft": "09-short-video-social.md"
+    },
+    "xiaohongshu": {
+      "status": "待提交",
+      "submitUrl": "https://creator.xiaohongshu.com/publish/publish",
+      "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
+      "draft": "09-short-video-social.md"
+    },
+    "x": {
+      "status": "待提交",
+      "submitUrl": "https://x.com/compose/post",
+      "media": "docs/promo/termexo-fleet-promo.mp4",
+      "draft": "09-short-video-social.md"
+    },
+    "weibo": {
+      "status": "待提交",
+      "submitUrl": "https://weibo.com/",
+      "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
+      "draft": "09-short-video-social.md"
+    }
+  },
+  "excludedPlatforms": {
+    "dev.to": "禁止 AI 辅助营销宣传稿；已主动排除",
+    "hackernews": "Show HN 要求作者人工亲写且禁止自动化发帖；已主动排除",
+    "aliyun": "禁止机器人生成及引流推广内容；已主动排除",
+    "tencentCloud": "不鼓励 AI 生成段落与推广稿；已主动排除",
+    "cnblogs": "平台严格限制机器生成内容；如需发文建议作者全手写纯源码解析"
+  }
+}

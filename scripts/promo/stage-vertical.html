@@ -1,0 +1,1637 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Termexo Fleet — 9:16 Mobile Cinema Edition (Large Legible Type + Macro Tracking)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #040807;
+      color: #eef7f3;
+      font-family: 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      user-select: none;
+    }
+
+    .stage {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #040807;
+    }
+
+    #bg-canvas {
+      position: absolute;
+      inset: 0;
+      width: 1080px;
+      height: 1920px;
+      z-index: 1;
+    }
+
+    .vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 92% 68% at 50% 50%, transparent 42%, rgba(2, 6, 5, 0.78) 100%),
+        linear-gradient(180deg, rgba(2, 6, 5, 0.56) 0%, transparent 14%, transparent 78%, rgba(2, 6, 5, 0.9) 100%);
+    }
+
+    /* ==================== TOP MOBILE-SAFE HUD (y >= 84px, GIANT LEGIBLE) ==================== */
+    .hud-top {
+      position: absolute;
+      top: 84px;
+      left: 44px;
+      right: 44px;
+      z-index: 42;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      opacity: 0;
+    }
+
+    .hud-brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      background: rgba(10, 17, 15, 0.84);
+      border: 1.5px solid rgba(220, 238, 230, 0.16);
+      backdrop-filter: blur(14px);
+    }
+
+    .hud-brand img {
+      width: 30px;
+      height: 30px;
+    }
+
+    .hud-brand span {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #f4fbf7;
+    }
+
+    .hud-chapter {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      background: rgba(10, 17, 15, 0.86);
+      border: 1.5px solid rgba(62, 198, 145, 0.34);
+      backdrop-filter: blur(14px);
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #7ee8be;
+    }
+
+    .hud-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      background: #3ec691;
+      box-shadow: 0 0 14px #3ec691;
+    }
+
+    /* ==================== UPPER-THIRD GIANT EDITORIAL HEADLINE ==================== */
+    .mobile-headline {
+      position: absolute;
+      top: 184px;
+      left: 40px;
+      right: 40px;
+      z-index: 40;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .mobile-headline-zh {
+      font-size: 64px;
+      font-weight: 900;
+      line-height: 1.22;
+      letter-spacing: -0.025em;
+      color: #f6fcf9;
+      text-shadow: 0 14px 40px rgba(0, 0, 0, 0.72);
+    }
+
+    .mobile-headline-zh em {
+      font-style: normal;
+      background: linear-gradient(90deg, #69f0ba, #2dd4bf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .mobile-headline-sub {
+      margin-top: 16px;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: rgba(224, 240, 233, 0.84);
+    }
+
+    .timeline-rail {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 5px;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .timeline-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3ec691, #2dd4bf, #4db8f0);
+      box-shadow: 0 0 18px rgba(62, 198, 145, 0.85);
+    }
+
+    /* ==================== ACT 1: GIANT VERTICAL PAIN-POINTS HOOK ==================== */
+    .act-hook {
+      position: absolute;
+      inset: 0;
+      z-index: 18;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 100px 48px 180px;
+      pointer-events: none;
+    }
+
+    .hook-kicker {
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #6ce5b6;
+      margin-bottom: 26px;
+      opacity: 0;
+    }
+
+    .hook-headline {
+      font-size: 76px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      text-align: center;
+      line-height: 1.2;
+      color: #f6fcf9;
+      margin-bottom: 54px;
+      opacity: 0;
+    }
+
+    .hook-headline span {
+      background: linear-gradient(90deg, #f5be4f, #ff786e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .pain-stack {
+      width: 100%;
+      max-width: 980px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .pain-card {
+      padding: 32px 34px;
+      border-radius: 26px;
+      background: rgba(14, 22, 20, 0.92);
+      border: 1.5px solid rgba(242, 109, 99, 0.34);
+      box-shadow: 0 22px 54px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      opacity: 0;
+    }
+
+    .pain-tag {
+      min-width: 132px;
+      text-align: center;
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 22px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .pain-tag.red { background: rgba(242, 109, 99, 0.18); color: #ffa39b; border: 1.5px solid rgba(242, 109, 99, 0.44); }
+    .pain-tag.amber { background: rgba(242, 180, 68, 0.18); color: #ffd27a; border: 1.5px solid rgba(242, 180, 68, 0.44); }
+
+    .pain-title {
+      font-size: 36px;
+      font-weight: 800;
+      color: #f6fcf9;
+      line-height: 1.25;
+    }
+
+    .pain-sub {
+      font-size: 25px;
+      font-weight: 500;
+      color: rgba(220, 236, 229, 0.78);
+      margin-top: 8px;
+      line-height: 1.35;
+    }
+
+    /* ==================== ACT 2: GIANT HERO BRAND REVEAL ==================== */
+    .act-hero {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 48px 120px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .hero-emblem-wrap {
+      position: relative;
+      width: 210px;
+      height: 210px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 46px;
+    }
+
+    .hero-ring {
+      position: absolute;
+      inset: -38px;
+      border-radius: 999px;
+      border: 2px solid rgba(62, 198, 145, 0.36);
+    }
+
+    .hero-ring.r2 {
+      inset: -84px;
+      border-color: rgba(45, 212, 191, 0.2);
+    }
+
+    .hero-emblem {
+      width: 176px;
+      height: 176px;
+      border-radius: 46px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(150deg, rgba(62, 198, 145, 0.3), rgba(10, 18, 15, 0.96));
+      border: 2px solid rgba(93, 226, 174, 0.62);
+      box-shadow: 0 32px 96px rgba(62, 198, 145, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+    }
+
+    .hero-emblem img {
+      width: 116px;
+      height: 116px;
+    }
+
+    .hero-title {
+      font-size: 110px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      background: linear-gradient(180deg, #ffffff 15%, #b9f3d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 28px;
+    }
+
+    .hero-zh {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #eafaf2;
+      margin-bottom: 34px;
+      line-height: 1.3;
+    }
+
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .hero-pill {
+      padding: 13px 26px;
+      border-radius: 999px;
+      background: rgba(62, 198, 145, 0.14);
+      border: 1.5px solid rgba(62, 198, 145, 0.42);
+      font-size: 24px;
+      font-weight: 700;
+      color: #84efc4;
+    }
+
+    /* ==================== MACRO-TRACKING 3D PRODUCT STAGE ==================== */
+    /* Full-width portrait cinema window (1016x1040) designed for 1.3x-1.6x legible close-ups! */
+    .stage-frame {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 416px;
+      height: 1054px;
+      z-index: 14;
+      border-radius: 32px;
+      overflow: hidden;
+      border: 2px solid rgba(220, 238, 230, 0.18);
+      background: radial-gradient(ellipse 90% 80% at 50% 45%, rgba(16, 30, 24, 0.92), rgba(5, 9, 8, 0.98));
+      box-shadow:
+        0 42px 110px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(62, 198, 145, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1800px;
+      opacity: 0;
+    }
+
+    .frame-glow {
+      position: absolute;
+      inset: -60px;
+      filter: blur(80px);
+      opacity: 0.48;
+      background: radial-gradient(circle at 50% 45%, rgba(62, 198, 145, 0.56), transparent 68%);
+      pointer-events: none;
+    }
+
+    .product-camera {
+      position: relative;
+      width: 1440px;
+      height: 900px;
+      flex-shrink: 0;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    .window-shell {
+      position: relative;
+      width: 1440px;
+      height: 900px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1.5px solid rgba(220, 238, 230, 0.2);
+      box-shadow: 0 35px 95px rgba(0, 0, 0, 0.78);
+      background: #080c0b;
+    }
+
+    .screen-layer {
+      position: absolute;
+      inset: 0;
+      width: 1440px;
+      height: 900px;
+      object-fit: cover;
+      opacity: 0;
+    }
+
+    .glass-sheen {
+      position: absolute;
+      inset: 0;
+      z-index: 18;
+      pointer-events: none;
+      background: linear-gradient(
+        118deg,
+        transparent 34%,
+        rgba(255, 255, 255, 0.055) 48%,
+        rgba(93, 226, 174, 0.065) 51%,
+        transparent 64%
+      );
+      transform: translateX(-120%);
+    }
+
+    .focus-ring {
+      position: absolute;
+      z-index: 22;
+      border-radius: 14px;
+      border: 3px solid #5ce0ab;
+      box-shadow:
+        0 0 0 4px rgba(62, 198, 145, 0.22),
+        0 0 38px rgba(62, 198, 145, 0.52),
+        inset 0 0 24px rgba(62, 198, 145, 0.12);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .ui-cursor {
+      position: absolute;
+      z-index: 30;
+      width: 38px;
+      height: 38px;
+      pointer-events: none;
+      opacity: 0;
+      filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.78));
+    }
+
+    .click-ripple {
+      position: absolute;
+      z-index: 28;
+      width: 78px;
+      height: 78px;
+      margin-left: -39px;
+      margin-top: -39px;
+      border-radius: 999px;
+      border: 3.5px solid #5ce0ab;
+      box-shadow: 0 0 28px rgba(62, 198, 145, 0.75);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .typing-overlay {
+      position: absolute;
+      z-index: 24;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #060a09;
+      color: #f4fbf7;
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.5;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .typing-caret {
+      display: inline-block;
+      width: 3px;
+      height: 22px;
+      background: #5ce0ab;
+      margin-left: 3px;
+      vertical-align: -4px;
+      box-shadow: 0 0 12px #5ce0ab;
+    }
+
+    /* BIG, CRYSTAL-CLEAR MOBILE ANSI PTY STREAM (21.5px in UI * 1.16x zoom = 25px on 1080p!) */
+    .pty-stream {
+      position: absolute;
+      z-index: 23;
+      background: #050908;
+      padding: 20px 22px;
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 21.5px;
+      line-height: 1.66;
+      color: #e4f2eb;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .pty-line {
+      white-space: pre-wrap;
+      margin-bottom: 6px;
+      opacity: 0;
+    }
+
+    .pty-dim { color: #789488; }
+    .pty-mint { color: #64f0b7; font-weight: 700; }
+    .pty-cyan { color: #5cc4ff; font-weight: 600; }
+    .pty-amber { color: #ffca5c; font-weight: 700; }
+    .pty-red { color: #ff948a; font-weight: 700; }
+    .pty-green { color: #73f7bb; font-weight: 700; }
+    .pty-white { color: #ffffff; font-weight: 700; }
+
+    .pty-banner {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 9px 14px;
+      border-radius: 10px;
+      background: rgba(242, 180, 68, 0.16);
+      border: 1.5px solid rgba(242, 180, 68, 0.48);
+      color: #ffd57e;
+      font-weight: 700;
+    }
+
+    .pty-approved {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 9px 14px;
+      border-radius: 10px;
+      background: rgba(62, 198, 145, 0.18);
+      border: 1.5px solid rgba(62, 198, 145, 0.52);
+      color: #84f2c6;
+      font-weight: 700;
+    }
+
+    /* ==================== LOWER-THIRD GIANT FEATURE CALLOUT (Mobile Safe!) ==================== */
+    /* Sits cleanly at y = 1502..1686px, above mobile bottom 230px platform chrome */
+    .lower-callout-slot {
+      position: absolute;
+      left: 36px;
+      right: 36px;
+      top: 1502px;
+      z-index: 40;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .mobile-kpi-card {
+      width: 100%;
+      padding: 28px 34px;
+      border-radius: 26px;
+      background: rgba(9, 18, 15, 0.94);
+      border: 2px solid rgba(93, 226, 174, 0.42);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 26px 68px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      opacity: 0;
+    }
+
+    .kpi-badge {
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 56px;
+      font-weight: 900;
+      line-height: 1;
+      color: #6df0b5;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+      min-width: 170px;
+      text-align: center;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .kpi-title {
+      font-size: 36px;
+      font-weight: 800;
+      color: #f6fcf9;
+      line-height: 1.2;
+    }
+
+    .kpi-sub {
+      margin-top: 8px;
+      font-size: 25px;
+      font-weight: 500;
+      color: rgba(222, 238, 231, 0.8);
+      line-height: 1.3;
+    }
+
+    /* ==================== DEDICATED 9:16 VERTICAL COVER HEADER ==================== */
+    .cover-header {
+      position: absolute;
+      top: 96px;
+      left: 44px;
+      right: 44px;
+      z-index: 44;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 26px;
+      border-radius: 999px;
+      background: rgba(10, 19, 16, 0.9);
+      border: 1.5px solid rgba(93, 226, 174, 0.46);
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #84efc4;
+      margin-bottom: 24px;
+    }
+
+    .cover-badge img {
+      width: 28px;
+      height: 28px;
+    }
+
+    .cover-title {
+      font-size: 80px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      background: linear-gradient(180deg, #ffffff 20%, #b6f3d7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .cover-sub {
+      margin-top: 16px;
+      font-size: 32px;
+      font-weight: 600;
+      color: rgba(232, 246, 240, 0.86);
+    }
+
+    /* ==================== ACT 8: GIANT VERTICAL OUTRO CTA ==================== */
+    .act-outro {
+      position: absolute;
+      inset: 0;
+      z-index: 38;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 48px 140px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .outro-mark {
+      width: 158px;
+      height: 158px;
+      border-radius: 40px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, rgba(62, 198, 145, 0.28), rgba(10, 18, 15, 0.96));
+      border: 2px solid rgba(93, 226, 174, 0.6);
+      box-shadow: 0 30px 88px rgba(62, 198, 145, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+      margin-bottom: 36px;
+    }
+
+    .outro-mark img {
+      width: 104px;
+      height: 104px;
+    }
+
+    .outro-title {
+      font-size: 104px;
+      font-weight: 900;
+      letter-spacing: -0.035em;
+      background: linear-gradient(180deg, #ffffff 20%, #b0f2d4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 22px;
+    }
+
+    .outro-tagline {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1.38;
+      color: rgba(238, 249, 244, 0.92);
+      margin-bottom: 50px;
+    }
+
+    .cta-cmd {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      padding: 28px 44px;
+      border-radius: 24px;
+      background: rgba(7, 14, 12, 0.96);
+      border: 2px solid rgba(62, 198, 145, 0.62);
+      box-shadow: 0 26px 76px rgba(62, 198, 145, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 40px;
+      font-weight: 800;
+      color: #f6fcf9;
+      margin-bottom: 46px;
+    }
+
+    .cta-shimmer {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 30%, rgba(126, 232, 190, 0.28) 50%, transparent 70%);
+      transform: translateX(-130%);
+      pointer-events: none;
+    }
+
+    .cta-prompt { color: #5ce0ab; }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 16px;
+      margin-bottom: 42px;
+    }
+
+    .plat-pill {
+      padding: 15px 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1.5px solid rgba(220, 238, 230, 0.2);
+      font-size: 26px;
+      font-weight: 700;
+      color: #e4f5ed;
+    }
+
+    .plat-pill.accent {
+      background: rgba(62, 198, 145, 0.16);
+      border-color: rgba(62, 198, 145, 0.48);
+      color: #84efc4;
+    }
+
+    .outro-links {
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 28px;
+      font-weight: 600;
+      color: rgba(206, 232, 221, 0.86);
+      letter-spacing: 0.02em;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="bg-canvas" width="1080" height="1920"></canvas>
+    <div class="vignette"></div>
+
+    <!-- Top Mobile-Safe HUD -->
+    <div class="hud-top" id="hud-top">
+      <div class="hud-brand" id="hud-brand">
+        <img src="assets/fleet-mark.svg" alt="" />
+        <span>Termexo Fleet</span>
+      </div>
+      <div class="hud-chapter" id="hud-chapter">
+        <span class="hud-dot" id="hud-dot"></span>
+        <span id="hud-chapter-text">01 · 任务指挥</span>
+      </div>
+    </div>
+
+    <!-- Upper-Third Giant Mobile Headline -->
+    <div class="mobile-headline" id="mobile-headline">
+      <div class="mobile-headline-zh" id="headline-zh"></div>
+      <div class="mobile-headline-sub" id="headline-sub"></div>
+    </div>
+
+    <!-- Dedicated 9:16 Cover Poster Header -->
+    <div class="cover-header" id="cover-header">
+      <div class="cover-badge">
+        <img src="assets/fleet-mark.svg" alt="" />
+        <span>TERMEXO FLEET</span>
+      </div>
+      <div class="cover-title">AI 编程舰队<br />指挥中枢</div>
+      <div class="cover-sub">零黑盒终端 · L1–L4 路由 · 多机蜂群</div>
+    </div>
+
+    <!-- ACT 1: Vertical Pain Points Hook -->
+    <section class="act-hook" id="act-hook">
+      <div class="hook-kicker" id="hook-kicker">MULTI-AGENT REALITY</div>
+      <h1 class="hook-headline" id="hook-headline">
+        多账号、多机器<br />跑 AI 编程<br />别再被<span>黑盒与限流</span>拖垮
+      </h1>
+      <div class="pain-stack">
+        <div class="pain-card" id="pain-0">
+          <span class="pain-tag amber">烧额度</span>
+          <div>
+            <div class="pain-title">杀鸡用牛刀，顶级额度烧得快</div>
+            <div class="pain-sub">改文案与补注释全扔给最贵模型</div>
+          </div>
+        </div>
+        <div class="pain-card" id="pain-1">
+          <span class="pain-tag red">429</span>
+          <div>
+            <div class="pain-title">限流报错只能人工盯着切号</div>
+            <div class="pain-sub">遇到 429 / 402 任务直接停摆</div>
+          </div>
+        </div>
+        <div class="pain-card" id="pain-2">
+          <span class="pain-tag red">盲区</span>
+          <div>
+            <div class="pain-title">单一模型自写自审存在盲区</div>
+            <div class="pain-sub">同源模型难发现死锁与安全漏洞</div>
+          </div>
+        </div>
+        <div class="pain-card" id="pain-3">
+          <span class="pain-tag amber">黑盒</span>
+          <div>
+            <div class="pain-title">黑盒多 Agent 无法实时介入</div>
+            <div class="pain-sub">看不到终端输出，卡审批难接管</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 2: Hero Brand Reveal -->
+    <section class="act-hero" id="act-hero">
+      <div class="hero-emblem-wrap">
+        <div class="hero-ring" id="hero-ring-1"></div>
+        <div class="hero-ring r2" id="hero-ring-2"></div>
+        <div class="hero-emblem">
+          <img src="assets/fleet-mark.svg" alt="Termexo Fleet" />
+        </div>
+      </div>
+      <div class="hero-title">Termexo Fleet</div>
+      <div class="hero-zh">本地优先的 AI 编程舰队<br />指挥中枢</div>
+      <div class="hero-pills">
+        <span class="hero-pill">零黑盒终端</span>
+        <span class="hero-pill">L1–L4 路由</span>
+        <span class="hero-pill">自主蜂群</span>
+      </div>
+    </section>
+
+    <!-- MACRO-TRACKING 3D PRODUCT STAGE (1.3x - 1.6x Mobile-Legible Close-ups!) -->
+    <section class="stage-frame" id="stage-frame">
+      <div class="frame-glow" id="frame-glow"></div>
+      <div class="product-camera" id="product-camera">
+        <div class="window-shell" id="window-shell">
+          <img id="scr-missions-clean" class="screen-layer" src="assets/missions-clean.png" alt="" />
+          <img id="scr-missions-typed" class="screen-layer" src="assets/missions-typed.png" alt="" />
+          <img id="scr-terminal-drawer" class="screen-layer" src="assets/terminal-drawer.png" alt="" />
+          <img id="scr-routing-l1" class="screen-layer" src="assets/routing-l1.png" alt="" />
+          <img id="scr-routing-l3" class="screen-layer" src="assets/routing-l3.png" alt="" />
+          <img id="scr-routing-l4" class="screen-layer" src="assets/routing-l4.png" alt="" />
+          <img id="scr-swarm-tree" class="screen-layer" src="assets/swarm-tree.png" alt="" />
+          <img id="scr-topology" class="screen-layer" src="assets/topology.png" alt="" />
+          <img id="scr-analytics" class="screen-layer" src="assets/analytics.png" alt="" />
+          <img id="scr-palette" class="screen-layer" src="assets/palette.png" alt="" />
+
+          <div class="typing-overlay" id="typing-overlay">
+            <span id="typing-text"></span><span class="typing-caret"></span>
+          </div>
+
+          <!-- Large-Font Live ANSI PTY Stream for effortless phone reading -->
+          <div class="pty-stream" id="pty-stream">
+            <div class="pty-line" id="pty-0"><span class="pty-dim">[node-local ·</span> <span class="pty-cyan">fleet/t-sched-core</span><span class="pty-dim">]</span></div>
+            <div class="pty-line" id="pty-1"><span class="pty-mint">❯</span> <span class="pty-white">claude "重构并发调度核心并消除死锁"</span></div>
+            <div class="pty-line" id="pty-2"><span class="pty-amber">●</span> 定位死锁: <span class="pty-white">pool_mutex → task_queue</span></div>
+            <div class="pty-line" id="pty-3"><span class="pty-mint">●</span> Edit scheduler.rs <span class="pty-green">+182</span> <span class="pty-red">-29</span></div>
+            <div class="pty-line" id="pty-4"><span class="pty-cyan">●</span> Bash <span class="pty-white">cargo test --workspace</span></div>
+            <div class="pty-line" id="pty-5">  <span class="pty-green">✓ 24 passed; 0 failed (0.84s)</span></div>
+            <div class="pty-line" id="pty-6"><span class="pty-banner">⚠ 派发 L4 异构审至 Mac Studio? [y/n]</span></div>
+            <div class="pty-line" id="pty-7"><span class="pty-mint">❯</span> <span class="pty-white">y</span> <span class="pty-dim">(Quick-Reply 快捷放行)</span></div>
+            <div class="pty-line" id="pty-8"><span class="pty-approved">✓ 已放行 → Codex gpt-5.4 独立审计中</span></div>
+          </div>
+
+          <div class="focus-ring" id="focus-ring"></div>
+          <div class="click-ripple" id="click-ripple"></div>
+          <svg class="ui-cursor" id="ui-cursor" viewBox="0 0 28 28" fill="none">
+            <path d="M5 3.5L22.5 14.5L14.5 16.2L11.2 24L5 3.5Z" fill="#ffffff" stroke="#081410" stroke-width="1.8" stroke-linejoin="round" />
+          </svg>
+          <div class="glass-sheen" id="glass-sheen"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lower-Third Giant Feature KPI Card (Mobile Safe Area!) -->
+    <div class="lower-callout-slot">
+      <div class="mobile-kpi-card" id="mobile-kpi-card">
+        <div class="kpi-badge" id="kpi-badge">L3</div>
+        <div>
+          <div class="kpi-title" id="kpi-title">智能路由预判</div>
+          <div class="kpi-sub" id="kpi-sub">自动匹配最优算力与多机槽位</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACT 8: Giant Vertical Outro CTA -->
+    <section class="act-outro" id="act-outro">
+      <div class="outro-mark">
+        <img src="assets/fleet-mark.svg" alt="Termexo Fleet" />
+      </div>
+      <div class="outro-title">Termexo Fleet</div>
+      <div class="outro-tagline">让多机、多账号 AI 舰队<br />全程透明可控</div>
+      <div class="cta-cmd" id="cta-cmd">
+        <div class="cta-shimmer" id="cta-shimmer"></div>
+        <span class="cta-prompt">$</span>
+        <span id="cta-typed">npx termexo-fleet@latest</span>
+        <span class="typing-caret" id="cta-caret"></span>
+      </div>
+      <div class="platform-grid" id="platform-pills">
+        <span class="plat-pill accent">Windows x64</span>
+        <span class="plat-pill accent">macOS 全芯片</span>
+        <span class="plat-pill accent">Linux x64</span>
+        <span class="plat-pill">MIT 开源本地</span>
+      </div>
+      <div class="outro-links" id="outro-links">
+        github.com/gemron/Termexo-Fleet<br />termexo.com/#fleet
+      </div>
+    </section>
+
+    <div class="timeline-rail">
+      <div class="timeline-fill" id="timeline-fill"></div>
+    </div>
+  </div>
+
+  <script>
+    const DURATION = 45.0;
+    const W = 1080;
+    const H = 1920;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const norm = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+    const easeOutExpo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+    const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+    const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const easeInOutQuint = (x) => (x < 0.5 ? 16 * x * x * x * x * x : 1 - Math.pow(-2 * x + 2, 5) / 2);
+
+    const $ = (id) => document.getElementById(id);
+    const bgCanvas = $('bg-canvas');
+    const ctx = bgCanvas.getContext('2d');
+
+    const particles = Array.from({ length: 72 }, (_, i) => {
+      const s = (n) => Math.sin(i * 127.1 + n * 311.7) * 43758.5453 % 1;
+      return {
+        x: Math.abs(s(1)) * W,
+        y: Math.abs(s(2)) * H,
+        r: 1.5 + Math.abs(s(3)) * 2.8,
+        vx: (Math.abs(s(4)) - 0.5) * 16,
+        vy: -10 - Math.abs(s(5)) * 20,
+        alpha: 0.16 + Math.abs(s(6)) * 0.4,
+        hue: i % 3 === 0 ? '#4db8f0' : i % 2 === 0 ? '#2dd4bf' : '#3ec691',
+      };
+    });
+
+    const constellationNodes = [
+      { x: 540, y: 240 }, { x: 160, y: 660 }, { x: 920, y: 660 },
+      { x: 540, y: 960 }, { x: 150, y: 1280 }, { x: 930, y: 1280 }, { x: 540, y: 1640 },
+    ];
+    const constellationEdges = [
+      [0, 1], [0, 2], [1, 3], [2, 3], [1, 4], [2, 5], [3, 4], [3, 5], [4, 6], [5, 6],
+    ];
+
+    function drawBackground(t, accentRgb) {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#040807';
+      ctx.fillRect(0, 0, W, H);
+
+      const [ar, ag, ab] = accentRgb;
+      const g1x = 540 + Math.sin(t * 0.3) * 240;
+      const g1y = 380 + Math.cos(t * 0.24) * 180;
+      const g1 = ctx.createRadialGradient(g1x, g1y, 20, g1x, g1y, 740);
+      g1.addColorStop(0, `rgba(${ar}, ${ag}, ${ab}, 0.22)`);
+      g1.addColorStop(0.55, `rgba(${ar}, ${ag}, ${ab}, 0.06)`);
+      g1.addColorStop(1, 'rgba(4, 8, 7, 0)');
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, W, H);
+
+      const g2x = 260 + Math.cos(t * 0.22) * 220;
+      const g2y = 1480 + Math.sin(t * 0.26) * 160;
+      const g2 = ctx.createRadialGradient(g2x, g2y, 10, g2x, g2y, 680);
+      g2.addColorStop(0, 'rgba(77, 184, 240, 0.14)');
+      g2.addColorStop(0.6, 'rgba(45, 212, 191, 0.03)');
+      g2.addColorStop(1, 'rgba(4, 8, 7, 0)');
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, W, H);
+
+      const spacing = 46;
+      const ox = (t * 7) % spacing;
+      const oy = (t * 6) % spacing;
+      ctx.fillStyle = 'rgba(220, 238, 230, 0.045)';
+      for (let x = ox; x < W; x += spacing) {
+        for (let y = oy; y < H; y += spacing) ctx.fillRect(x, y, 1.5, 1.5);
+      }
+
+      const constAlpha = Math.max(1 - norm(t, 8.2, 9.6), norm(t, 38.8, 40.2)) * 0.68;
+      if (constAlpha > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = constAlpha;
+        for (let e = 0; e < constellationEdges.length; e++) {
+          const [ia, ib] = constellationEdges[e];
+          const a = constellationNodes[ia];
+          const b = constellationNodes[ib];
+          ctx.strokeStyle = `rgba(${ar}, ${ag}, ${ab}, 0.18)`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+
+          const p = (t * 0.42 + e * 0.23) % 1;
+          const px = lerp(a.x, b.x, p);
+          const py = lerp(a.y, b.y, p);
+          const pg = ctx.createRadialGradient(px, py, 0, px, py, 14);
+          pg.addColorStop(0, `rgba(${ar}, ${ag}, ${ab}, 0.95)`);
+          pg.addColorStop(1, `rgba(${ar}, ${ag}, ${ab}, 0)`);
+          ctx.fillStyle = pg;
+          ctx.beginPath();
+          ctx.arc(px, py, 14, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      for (const p of particles) {
+        const x = ((p.x + p.vx * t) % W + W) % W;
+        const y = ((p.y + p.vy * t) % H + H) % H;
+        ctx.globalAlpha = p.alpha * (0.65 + 0.35 * Math.sin(t * 2 + p.x));
+        ctx.fillStyle = p.hue;
+        ctx.beginPath();
+        ctx.arc(x, y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    const SCREENS = [
+      'scr-missions-clean', 'scr-missions-typed', 'scr-terminal-drawer',
+      'scr-routing-l1', 'scr-routing-l3', 'scr-routing-l4',
+      'scr-swarm-tree', 'scr-topology', 'scr-analytics', 'scr-palette',
+    ];
+    function setScreenOpacities(map) {
+      for (const id of SCREENS) $(id).style.opacity = map[id] ?? 0;
+    }
+
+    const CHAPTERS = [
+      { start: 9.2, end: 17.5, label: '01 · 任务指挥', color: '#3ec691' },
+      { start: 17.5, end: 22.2, label: '02 · 实时终端', color: '#2dd4bf' },
+      { start: 22.2, end: 28.0, label: '03 · 难度天梯', color: '#f2b444' },
+      { start: 28.0, end: 31.3, label: '04 · 自主蜂群', color: '#4db8f0' },
+      { start: 31.3, end: 34.5, label: '05 · 多机算力网', color: '#3ec691' },
+      { start: 34.5, end: 39.2, label: '06 · 省费账本', color: '#52cb84' },
+    ];
+
+    const HEADLINES = [
+      {
+        start: 10.4, end: 17.3,
+        zh: '一句话下发需求<br /><em>实时路由预判</em> + DAG 流水线',
+        sub: '自动拆分 实现 → 测试 → L4 异构审',
+      },
+      {
+        start: 17.6, end: 22.0,
+        zh: '<em>零黑盒</em> 真实 PTY 终端<br />随时旁观与一键放行',
+        sub: '直连 Claude Code 实时输出 · 快捷审批不卡顿',
+      },
+      {
+        start: 22.3, end: 27.8,
+        zh: '<em>L1–L4</em> 智能难度天梯<br />轻量省钱 · 关键代码异构审',
+        sub: 'Claude 实现 → 自动切 Codex 独立安全复核',
+      },
+      {
+        start: 28.1, end: 31.1,
+        zh: '反向 MCP 自主派生<br /><em>子 Agent 蜂群</em> Worktree 隔离',
+        sub: '递归深度 + 并发预算双护栏，失控自动熔断',
+      },
+      {
+        start: 31.4, end: 34.3,
+        zh: 'Win + Mac + Linux<br /><em>多机星型算力网</em> 亲和调度',
+        sub: '本机直连、局域网与 Tailscale 自动组网',
+      },
+      {
+        start: 34.6, end: 39.0,
+        zh: '本地效能账本实测 <em>省费 50%</em><br />多通道告警 + Ctrl+K 指挥',
+        sub: '飞书 / 企微 / 微信同步提醒 · 全键盘极速流',
+      },
+    ];
+
+    const DEMO_TYPING = '重构核心并发调度并消除死锁，随后由异构模型进行 L4 安全审计。';
+
+    let COORDS = {
+      goalInput: { x: 286, y: 186, w: 1110, h: 58 },
+      forecast: { x: 272, y: 334, w: 1140, h: 40 },
+      dag: { x: 288, y: 506, w: 1110, h: 360 },
+      termBtn: { x: 525, y: 690, w: 80, h: 26 },
+      termViewport: { x: 740, y: 92, w: 682, h: 684 },
+      drawerReply: { x: 738, y: 785, w: 684, h: 98 },
+      approveBtn: { x: 758, y: 804, w: 62, h: 26 },
+      chipL1: { x: 964, y: 132, w: 102, h: 24 },
+      chipL3: { x: 1184, y: 132, w: 102, h: 24 },
+      chipL4: { x: 1294, y: 132, w: 102, h: 24 },
+      swarmTree: { x: 288, y: 205, w: 1110, h: 320 },
+      topology: { x: 272, y: 115, w: 1140, h: 310 },
+    };
+
+    window.__coordsReady = fetch('assets/layout-coords.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) COORDS = { ...COORDS, ...data }; })
+      .catch(() => {});
+
+    const centerOf = (r) => ({ x: r.x + r.w * 0.5, y: r.y + r.h * 0.5 });
+    const applyFocusBox = (el, r, pad = 4, color = '#5ce0ab') => {
+      el.style.left = `${r.x - pad}px`;
+      el.style.top = `${r.y - pad}px`;
+      el.style.width = `${r.w + pad * 2}px`;
+      el.style.height = `${r.h + pad * 2}px`;
+      el.style.borderColor = color;
+    };
+
+    // Helper: compute camera tx,ty so any exact UI point (ux, uy) inside 1440x900 sits DEAD-CENTER in stage-frame at scale `sc`!
+    // Since CSS transform is `translate3d(tx, ty, 0) scale(sc)` with transform-origin center (720, 450):
+    // screenOffsetX = tx + (ux - 720) * sc  ==>  tx = (720 - ux) * sc
+    // screenOffsetY = ty + (uy - 450) * sc  ==>  ty = (450 - uy) * sc
+    const focusAt = (ux, uy, sc) => ({
+      tx: (720 - ux) * sc,
+      ty: (450 - uy) * sc,
+      sc,
+    });
+
+    function setKpi(alpha, badge, badgeColor, title, sub, borderColor) {
+      const card = $('mobile-kpi-card');
+      card.style.opacity = alpha;
+      card.style.transform = `translateY(${lerp(24, 0, alpha)}px)`;
+      card.style.borderColor = borderColor || 'rgba(93, 226, 174, 0.42)';
+      $('kpi-badge').textContent = badge;
+      $('kpi-badge').style.color = badgeColor;
+      $('kpi-title').textContent = title;
+      $('kpi-sub').textContent = sub;
+    }
+
+    window.__setTime = function (t) {
+      $('cover-header').style.opacity = 0;
+      $('stage-frame').style.top = '416px';
+      $('stage-frame').style.height = '1054px';
+      $('timeline-fill').style.width = `${clamp((t / DURATION) * 100, 0, 100)}%`;
+
+      let accentRgb = [62, 198, 145];
+      if (t >= 0 && t < 5.0) accentRgb = [242, 109, 99];
+      else if (t >= 23.4 && t < 25.0) accentRgb = [77, 184, 240];
+      else if (t >= 25.0 && t < 26.5) accentRgb = [242, 180, 68];
+      else if (t >= 26.5 && t < 28.0) accentRgb = [242, 109, 99];
+      else if (t >= 28.0 && t < 31.3) accentRgb = [77, 184, 240];
+
+      drawBackground(t, accentRgb);
+
+      // ==================== ACT 1: HOOK ====================
+      const hookEl = $('act-hook');
+      if (t < 5.5) {
+        const hookOut = easeInOutCubic(norm(t, 4.45, 5.15));
+        hookEl.style.opacity = 1 - hookOut;
+        hookEl.style.transform = `scale(${lerp(1, 0.88, hookOut)}) translateY(${lerp(0, -40, hookOut)}px)`;
+
+        const kIn = easeOutCubic(norm(t, 0.15, 0.7));
+        $('hook-kicker').style.opacity = kIn;
+        $('hook-kicker').style.transform = `translateY(${lerp(18, 0, kIn)}px)`;
+
+        const hIn = easeOutExpo(norm(t, 0.35, 1.15));
+        $('hook-headline').style.opacity = hIn;
+        $('hook-headline').style.transform = `translateY(${lerp(32, 0, hIn)}px)`;
+
+        for (let i = 0; i < 4; i++) {
+          const pIn = easeOutExpo(norm(t, 1.05 + i * 0.28, 1.75 + i * 0.28));
+          const el = $(`pain-${i}`);
+          el.style.opacity = pIn;
+          el.style.transform = `translateY(${lerp(30, 0, pIn)}px) scale(${lerp(0.95, 1, pIn)})`;
+        }
+      } else {
+        hookEl.style.opacity = 0;
+      }
+
+      // ==================== ACT 2: HERO REVEAL ====================
+      const heroEl = $('act-hero');
+      if (t >= 4.9 && t <= 9.7) {
+        const hIn = easeOutExpo(norm(t, 5.15, 6.2));
+        const hOut = easeInOutCubic(norm(t, 8.2, 9.2));
+        heroEl.style.opacity = hIn * (1 - hOut);
+        heroEl.style.transform = `translateY(${lerp(44, 0, hIn) - hOut * 110}px) scale(${lerp(0.88, 1, hIn) * lerp(1, 0.92, hOut)})`;
+        $('hero-ring-1').style.transform = `scale(${lerp(0.6, 1, hIn) * (1 + Math.sin(t * 3.5) * 0.04)})`;
+        $('hero-ring-2').style.transform = `scale(${lerp(0.45, 1, hIn) * (1 + Math.cos(t * 2.8) * 0.05)})`;
+      } else {
+        heroEl.style.opacity = 0;
+      }
+
+      // ==================== TOP HUD & UPPER HEADLINE ====================
+      const hudIn = easeOutCubic(norm(t, 9.1, 9.7));
+      const hudOut = easeOutCubic(norm(t, 38.8, 39.3));
+      $('hud-top').style.opacity = hudIn * (1 - hudOut);
+      const activeChap = CHAPTERS.find((c) => t >= c.start && t < c.end);
+      if (activeChap) {
+        $('hud-chapter-text').textContent = activeChap.label;
+        $('hud-dot').style.background = activeChap.color;
+        $('hud-dot').style.boxShadow = `0 0 14px ${activeChap.color}`;
+      }
+
+      const hlBox = $('mobile-headline');
+      const hl = HEADLINES.find((h) => t >= h.start && t <= h.end);
+      if (hl) {
+        const a = easeOutCubic(norm(t, hl.start, hl.start + 0.35)) * (1 - easeOutCubic(norm(t, hl.end - 0.3, hl.end)));
+        hlBox.style.opacity = a;
+        hlBox.style.transform = `translateY(${lerp(16, 0, a)}px)`;
+        $('headline-zh').innerHTML = hl.zh;
+        $('headline-sub').textContent = hl.sub;
+      } else {
+        hlBox.style.opacity = 0;
+      }
+
+      // ==================== MACRO-TRACKING 3D PRODUCT STAGE ====================
+      const sf = $('stage-frame');
+      const cam = $('product-camera');
+      const sheen = $('glass-sheen');
+      const focusRing = $('focus-ring');
+      const cursor = $('ui-cursor');
+      const ripple = $('click-ripple');
+      const typingOverlay = $('typing-overlay');
+      const ptyStream = $('pty-stream');
+      const glow = $('frame-glow');
+
+      focusRing.style.opacity = 0;
+      cursor.style.opacity = 0;
+      ripple.style.opacity = 0;
+      typingOverlay.style.opacity = 0;
+      ptyStream.style.opacity = 0;
+      $('mobile-kpi-card').style.opacity = 0;
+
+      if (t >= 8.4 && t <= 39.8) {
+        const vpIn = easeOutExpo(norm(t, 8.5, 10.1));
+        const vpOut = easeInOutCubic(norm(t, 38.7, 39.6));
+        sf.style.opacity = vpIn * (1 - vpOut);
+        glow.style.background = `radial-gradient(circle at 50% 45%, rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.56), transparent 68%)`;
+
+        let camState = focusAt(720, 450, 0.70);
+        let rx = 0;
+        let ry = 0;
+        let sheenPos = -120;
+
+        if (t < 10.6) {
+          // Brief 3D establishing overview of the entire frameless desktop app before macro zoom-in!
+          const u = easeOutExpo(norm(t, 8.5, 10.35));
+          camState = focusAt(720, 450, lerp(0.58, 0.70, u));
+          camState.ty += lerp(180, 0, u);
+          rx = lerp(16, 0, u);
+          ry = lerp(-6, 0, u);
+          sheenPos = lerp(-120, 140, norm(t, 9.0, 10.5));
+          setScreenOpacities({ 'scr-missions-clean': 1 });
+        } else if (t < 17.5) {
+          if (t < 14.1) {
+            // MACRO ZOOM 1.22x onto Prompt Composer & Glowing Live Route Forecast Ribbon (fills frame edge-to-edge!)
+            const zIn = easeInOutCubic(norm(t, 10.6, 11.4));
+            const panForecast = easeInOutCubic(norm(t, 13.25, 13.95));
+            const start = focusAt(720, 450, 0.70);
+            const target = focusAt(lerp(690, 940, panForecast), 420, 1.22);
+            camState = {
+              tx: lerp(start.tx, target.tx, zIn),
+              ty: lerp(start.ty, target.ty, zIn),
+              sc: lerp(start.sc, target.sc, zIn),
+            };
+            rx = lerp(0, 1.2, zIn);
+            ry = lerp(0, -1.2, zIn);
+
+            const typedBlend = easeOutCubic(norm(t, 13.3, 13.65));
+            setScreenOpacities({
+              'scr-missions-clean': 1 - typedBlend,
+              'scr-missions-typed': typedBlend,
+            });
+
+            if (t >= 11.35 && t < 13.45) {
+              const chars = Math.floor(norm(t, 11.4, 13.15) * DEMO_TYPING.length);
+              typingOverlay.style.opacity = 1 - typedBlend;
+              typingOverlay.style.left = `${COORDS.goalInput.x}px`;
+              typingOverlay.style.top = `${COORDS.goalInput.y}px`;
+              typingOverlay.style.width = `${COORDS.goalInput.w}px`;
+              typingOverlay.style.minHeight = `${COORDS.goalInput.h}px`;
+              $('typing-text').textContent = DEMO_TYPING.slice(0, chars);
+            }
+
+            if (t >= 13.35) {
+              const fIn = easeOutCubic(norm(t, 13.35, 13.7));
+              focusRing.style.opacity = fIn;
+              applyFocusBox(focusRing, COORDS.forecast, 2, '#5ce0ab');
+            }
+
+            const kpiA = easeOutCubic(norm(t, 11.1, 11.6));
+            setKpi(
+              kpiA,
+              t >= 13.35 ? 'L3' : 'Auto',
+              t >= 13.35 ? '#ffca5c' : '#64f0b7',
+              t >= 13.35 ? '已锁定 L3 架构攻坚档位' : '实时难度评估与路由预判',
+              t >= 13.35 ? 'Mac Studio · Codex Team (gpt-5.4)' : '自动分析任务复杂度并匹配空闲槽位',
+              t >= 13.35 ? 'rgba(242, 180, 68, 0.48)' : 'rgba(93, 226, 174, 0.4)',
+            );
+          } else {
+            // MACRO ZOOM 1.46x onto 3-Stage DAG! Smoothly pans Stage 01 -> Stage 02 -> Stage 01 实时终端!
+            const pan = easeInOutQuint(norm(t, 14.1, 15.1));
+            const sweepMid = Math.sin(norm(t, 15.1, 16.5) * Math.PI);
+            const prev = focusAt(940, 420, 1.22);
+            const dagTarget = focusAt(560 + sweepMid * 360, 565, 1.44);
+            camState = {
+              tx: lerp(prev.tx, dagTarget.tx, pan),
+              ty: lerp(prev.ty, dagTarget.ty, pan),
+              sc: lerp(prev.sc, dagTarget.sc, pan),
+            };
+            rx = lerp(1.2, -0.8, pan);
+            ry = lerp(-1.2, 1.0, pan);
+            setScreenOpacities({ 'scr-missions-typed': 1 });
+
+            const dagFocus = easeOutCubic(norm(t, 14.8, 15.4)) * (1 - norm(t, 17.1, 17.5));
+            focusRing.style.opacity = dagFocus * 0.85;
+            applyFocusBox(focusRing, COORDS.dag, 6, '#3ec691');
+
+            if (t >= 16.35) {
+              const cMove = easeOutCubic(norm(t, 16.35, 17.28));
+              const tb = centerOf(COORDS.termBtn);
+              cursor.style.opacity = norm(t, 16.35, 16.6);
+              cursor.style.left = `${lerp(tb.x + 120, tb.x, cMove)}px`;
+              cursor.style.top = `${lerp(tb.y - 50, tb.y, cMove)}px`;
+            }
+
+            setKpi(
+              1 - norm(t, 17.15, 17.5),
+              'DAG',
+              '#64f0b7',
+              '三阶段可视化流水线',
+              '实现 → 跨机测试 → L4 异构安全审查',
+              'rgba(62, 198, 145, 0.44)',
+            );
+          }
+        } else if (t < 22.2) {
+          // ACT 4: FULL-FRAME 1.16x PORTRAIT LIVE TERMINAL DRAWER (top header + giant ANSI logs + bottom Quick-Reply Dock 100% unclipped!)
+          const openBlend = easeOutExpo(norm(t, 17.5, 17.95));
+          const settle = easeInOutCubic(norm(t, 17.5, 18.4));
+          const prev = focusAt(560, 565, 1.44);
+          const termTarget = focusAt(1082, 450, 1.16);
+          camState = {
+            tx: lerp(prev.tx, termTarget.tx, settle),
+            ty: lerp(prev.ty, termTarget.ty, settle),
+            sc: lerp(prev.sc, termTarget.sc, settle),
+          };
+          rx = 0;
+          ry = lerp(1.0, -0.8, settle);
+
+          setScreenOpacities({
+            'scr-missions-typed': 1 - openBlend,
+            'scr-terminal-drawer': openBlend,
+          });
+
+          if (COORDS.termViewport) {
+            ptyStream.style.opacity = openBlend;
+            ptyStream.style.left = `${COORDS.termViewport.x}px`;
+            ptyStream.style.top = `${COORDS.termViewport.y}px`;
+            ptyStream.style.width = `${COORDS.termViewport.w}px`;
+            ptyStream.style.height = `${COORDS.termViewport.h}px`;
+
+            const lineTimes = [17.62, 17.80, 18.08, 18.38, 18.68, 18.98, 19.34, 20.34, 20.52];
+            for (let i = 0; i < lineTimes.length; i++) {
+              const el = $(`pty-${i}`);
+              const li = easeOutCubic(norm(t, lineTimes[i], lineTimes[i] + 0.16));
+              el.style.opacity = li;
+              el.style.transform = `translateY(${lerp(8, 0, li)}px)`;
+            }
+          }
+
+          if (t < 18.0) {
+            const rp = norm(t, 17.45, 17.95);
+            const tb = centerOf(COORDS.termBtn);
+            ripple.style.opacity = (1 - rp) * 0.9;
+            ripple.style.left = `${tb.x}px`;
+            ripple.style.top = `${tb.y}px`;
+            ripple.style.borderColor = '#5ce0ab';
+            ripple.style.transform = `scale(${lerp(0.3, 1.5, rp)})`;
+          }
+
+          if (t >= 19.55 && t < 21.6 && COORDS.approveBtn) {
+            const ap = centerOf(COORDS.approveBtn);
+            const cMove = easeOutCubic(norm(t, 19.65, 20.22));
+            cursor.style.opacity = norm(t, 19.55, 19.75) * (1 - norm(t, 21.1, 21.55));
+            cursor.style.left = `${lerp(ap.x + 190, ap.x, cMove)}px`;
+            cursor.style.top = `${lerp(ap.y - 110, ap.y, cMove)}px`;
+
+            if (t >= 20.26 && t < 20.76) {
+              const rp = norm(t, 20.26, 20.76);
+              ripple.style.opacity = (1 - rp) * 0.95;
+              ripple.style.left = `${ap.x}px`;
+              ripple.style.top = `${ap.y}px`;
+              ripple.style.borderColor = '#5ce0ab';
+              ripple.style.transform = `scale(${lerp(0.25, 1.55, rp)})`;
+            }
+          }
+
+          if (t >= 19.2 && t < 21.8) {
+            const f = easeOutCubic(norm(t, 19.2, 19.6)) * (1 - norm(t, 21.4, 21.8));
+            focusRing.style.opacity = f * 0.9;
+            applyFocusBox(focusRing, COORDS.drawerReply, 5, '#2dd4bf');
+          }
+
+          const approved = t >= 20.34;
+          setKpi(
+            easeOutCubic(norm(t, 17.7, 18.15)) * (1 - norm(t, 21.85, 22.2)),
+            approved ? '✓ y' : 'PTY',
+            approved ? '#73f7bb' : '#2dd4bf',
+            approved ? '已一键放行 · L4 异构审启动' : '直连真实 Termexo PTY 终端',
+            approved ? '派发至 Mac Studio (Codex gpt-5.4)' : '实时看日志、随时发指令或点同意',
+            approved ? 'rgba(109, 240, 181, 0.52)' : 'rgba(45, 212, 191, 0.44)',
+          );
+          sheenPos = lerp(-120, 140, norm(t, 17.8, 19.8));
+        } else if (t < 28.0) {
+          // ACT 5: MACRO TRACKING L1 -> L3 -> L4 ROUTING LADDER (1.24x - keeps chips & tier cards cleanly inside!)
+          const enter = easeOutExpo(norm(t, 22.2, 22.95));
+          const toL3Cam = easeInOutCubic(norm(t, 24.6, 25.3));
+          const toL4Cam = easeInOutCubic(norm(t, 26.1, 26.8));
+          const prev = focusAt(1082, 450, 1.16);
+          const focusX = lerp(lerp(750, 940, toL3Cam), 1020, toL4Cam);
+          const ladderTarget = focusAt(focusX, 420, 1.24);
+          camState = {
+            tx: lerp(prev.tx, ladderTarget.tx, enter),
+            ty: lerp(prev.ty, ladderTarget.ty, enter),
+            sc: lerp(prev.sc, ladderTarget.sc, enter),
+          };
+          rx = 0.8;
+          ry = lerp(-0.8, 1.0, enter);
+
+          const toL3 = easeOutCubic(norm(t, 25.0, 25.3));
+          const toL4 = easeOutCubic(norm(t, 26.5, 26.8));
+          setScreenOpacities({
+            'scr-routing-l1': 1 - toL3,
+            'scr-routing-l3': toL3 * (1 - toL4),
+            'scr-routing-l4': toL4,
+          });
+
+          const p1 = centerOf(COORDS.chipL1);
+          const p3 = centerOf(COORDS.chipL3);
+          const p4 = centerOf(COORDS.chipL4);
+          cursor.style.opacity = easeOutCubic(norm(t, 22.7, 23.1)) * (1 - norm(t, 27.4, 27.9));
+          let cx = p1.x, cy = p1.y;
+          if (t < 24.4) {
+            const m = easeOutCubic(norm(t, 22.8, 23.38));
+            cx = lerp(p1.x - 100, p1.x, m);
+            cy = lerp(p1.y + 80, p1.y, m);
+          } else if (t < 26.0) {
+            const m = easeOutCubic(norm(t, 24.45, 24.98));
+            cx = lerp(p1.x, p3.x, m);
+            cy = lerp(p1.y, p3.y, m);
+          } else {
+            const m = easeOutCubic(norm(t, 26.0, 26.48));
+            cx = lerp(p3.x, p4.x, m);
+            cy = lerp(p3.y, p4.y, m);
+          }
+          cursor.style.left = `${cx}px`;
+          cursor.style.top = `${cy}px`;
+
+          for (const [ct, pt, col] of [
+            [23.4, p1, '#4db8f0'],
+            [25.0, p3, '#f2b444'],
+            [26.5, p4, '#f26d63'],
+          ]) {
+            if (t >= ct && t < ct + 0.5) {
+              const rp = norm(t, ct, ct + 0.5);
+              ripple.style.opacity = (1 - rp) * 0.95;
+              ripple.style.left = `${pt.x}px`;
+              ripple.style.top = `${pt.y}px`;
+              ripple.style.borderColor = col;
+              ripple.style.transform = `scale(${lerp(0.25, 1.5, rp)})`;
+            }
+          }
+
+          const kA = easeOutCubic(norm(t, 22.5, 22.95)) * (1 - norm(t, 27.65, 28.0));
+          if (t < 25.0) {
+            setKpi(kA, 'L1', '#5cc4ff', '轻量改动走闪电省钱档', '文档 / 注释自动命中 DeepSeek Flash', 'rgba(77, 184, 240, 0.46)');
+          } else if (t < 26.5) {
+            setKpi(kA, 'L3', '#ffca5c', '核心重构走顶级推理档', '自动调度 Claude / Codex 旗舰模型', 'rgba(242, 180, 68, 0.48)');
+          } else {
+            setKpi(kA, 'L4', '#ffa39b', '异构审 · 排除作者家族', 'Claude 实现 → Codex 独立安全复核', 'rgba(242, 109, 99, 0.52)');
+          }
+        } else if (t < 31.3) {
+          // ACT 6A: MACRO ZOOM 1.32x onto ROOT -> SUB·D1 Worktree Swarm Tree!
+          const u = easeOutExpo(norm(t, 28.0, 28.9));
+          const sweep = easeInOutCubic(norm(t, 28.9, 30.8));
+          const prev = focusAt(1020, 420, 1.24);
+          const swarmTarget = focusAt(lerp(660, 770, sweep), 415, 1.32);
+          camState = {
+            tx: lerp(prev.tx, swarmTarget.tx, u),
+            ty: lerp(prev.ty, swarmTarget.ty, u),
+            sc: lerp(prev.sc, swarmTarget.sc, u),
+          };
+          rx = 0.6;
+          ry = lerp(1.0, -1.0, u);
+          setScreenOpacities({ 'scr-swarm-tree': 1 });
+
+          const f = easeOutCubic(norm(t, 28.6, 29.1)) * (1 - norm(t, 30.8, 31.2));
+          focusRing.style.opacity = f * 0.88;
+          applyFocusBox(focusRing, COORDS.swarmTree, 6, '#4db8f0');
+          sheenPos = lerp(-120, 140, norm(t, 28.2, 30.2));
+
+          setKpi(
+            easeOutCubic(norm(t, 28.2, 28.65)) * (1 - norm(t, 30.95, 31.3)),
+            'D≤2',
+            '#5cc4ff',
+            '反向 MCP 派生子 Agent 蜂群',
+            '独立 Git Worktree 隔离 · 深度与预算护栏',
+            'rgba(77, 184, 240, 0.46)',
+          );
+        } else if (t < 34.5) {
+          // ACT 6B: MACRO PAN 1.38x across Hub -> Windows 主力机 -> Mac Studio 构建机!
+          const u = easeOutExpo(norm(t, 31.3, 32.0));
+          const sweep = easeInOutCubic(norm(t, 32.0, 34.1));
+          const prev = focusAt(770, 415, 1.32);
+          const topoTarget = focusAt(lerp(590, 1060, sweep), 390, 1.38);
+          camState = {
+            tx: lerp(prev.tx, topoTarget.tx, u),
+            ty: lerp(prev.ty, topoTarget.ty, u),
+            sc: lerp(prev.sc, topoTarget.sc, u),
+          };
+          rx = 0.8;
+          ry = lerp(-1.0, 1.2, u);
+          setScreenOpacities({ 'scr-topology': 1 });
+
+          const f = easeOutCubic(norm(t, 31.9, 32.4)) * (1 - norm(t, 34.0, 34.4));
+          focusRing.style.opacity = f * 0.85;
+          applyFocusBox(focusRing, COORDS.topology, 4, '#3ec691');
+
+          setKpi(
+            easeOutCubic(norm(t, 31.5, 31.95)) * (1 - norm(t, 34.15, 34.5)),
+            '2 / 2',
+            '#64f0b7',
+            'Win + Mac + Linux 多机星网',
+            '本机直连、局域网与 Tailscale 亲和调度',
+            'rgba(62, 198, 145, 0.46)',
+          );
+        } else {
+          // ACT 7: MACRO ZOOM 1.44x onto Analytics KPI Cards (-50%) -> 1.62x GIANT Ctrl+K Palette!
+          const u = easeOutExpo(norm(t, 34.5, 35.25));
+          const palMove = easeOutExpo(norm(t, 37.3, 37.8));
+          const prev = focusAt(1080, 320, 1.44);
+          const anaSweep = easeInOutCubic(norm(t, 35.3, 37.1));
+          const anaTarget = focusAt(lerp(660, 960, anaSweep), lerp(310, 490, anaSweep), 1.38);
+          const palTarget = focusAt(720, 390, 1.62); // Giant crisp Ctrl+K Command Palette fills phone width!
+          const curAna = {
+            tx: lerp(prev.tx, anaTarget.tx, u),
+            ty: lerp(prev.ty, anaTarget.ty, u),
+            sc: lerp(prev.sc, anaTarget.sc, u),
+          };
+          camState = {
+            tx: lerp(curAna.tx, palTarget.tx, palMove),
+            ty: lerp(curAna.ty, palTarget.ty, palMove),
+            sc: lerp(curAna.sc, palTarget.sc, palMove),
+          };
+          rx = 0;
+          ry = 0;
+
+          const palBlend = easeOutExpo(norm(t, 37.35, 37.65));
+          setScreenOpacities({
+            'scr-analytics': 1 - palBlend,
+            'scr-palette': palBlend,
+          });
+
+          const pct = Math.round(lerp(0, 50, easeOutExpo(norm(t, 34.8, 36.0))));
+          const isPal = t >= 37.4;
+          setKpi(
+            easeOutCubic(norm(t, 34.7, 35.15)) * (1 - norm(t, 38.75, 39.2)),
+            isPal ? 'Ctrl+K' : `-${pct}%`,
+            '#73f7bb',
+            isPal ? '全局命令面板 · 极速键盘流' : '难度路由实测算力省费 50%',
+            isPal ? 'Alt+1~6 秒切视图 · 一键直达终端' : 'SQLite 本地账本 + 飞书 / 企微 / 微信告警',
+            'rgba(109, 240, 181, 0.5)',
+          );
+          sheenPos = lerp(-120, 140, norm(t, 34.8, 37.0));
+        }
+
+        const floatY = Math.sin(t * 1.1) * 3.0;
+        cam.style.transform = `translate3d(${camState.tx}px, ${camState.ty + floatY}px, 0) scale(${camState.sc}) rotateX(${rx}deg) rotateY(${ry}deg)`;
+        sheen.style.transform = `translateX(${sheenPos}%)`;
+      } else {
+        sf.style.opacity = 0;
+      }
+
+      // ==================== ACT 8: ICONIC CLOSING CTA ====================
+      const outroEl = $('act-outro');
+      if (t >= 39.0) {
+        const oIn = easeOutExpo(norm(t, 39.2, 40.3));
+        const endFade = 1 - easeInOutCubic(norm(t, 44.1, 44.95));
+        outroEl.style.opacity = oIn * endFade;
+        outroEl.style.transform = `scale(${lerp(0.92, 1, oIn)}) translateY(${lerp(28, 0, oIn)}px)`;
+
+        const cmdFull = 'npx termexo-fleet@latest';
+        const typedCount = Math.floor(norm(t, 40.0, 41.4) * cmdFull.length);
+        $('cta-typed').textContent = cmdFull.slice(0, typedCount);
+        $('cta-caret').style.opacity = Math.floor(t * 2.5) % 2 === 0 ? 1 : 0.2;
+        const shim = norm(t, 41.55, 42.9);
+        $('cta-shimmer').style.transform = `translateX(${lerp(-130, 130, shim)}%)`;
+
+        const pillsIn = easeOutCubic(norm(t, 40.8, 41.6));
+        $('platform-pills').style.opacity = pillsIn;
+        $('platform-pills').style.transform = `translateY(${lerp(16, 0, pillsIn)}px)`;
+
+        const linksIn = easeOutCubic(norm(t, 41.3, 42.1));
+        $('outro-links').style.opacity = linksIn;
+      } else {
+        outroEl.style.opacity = 0;
+      }
+    };
+
+    // Dedicated Giant-Type 1080x1920 Mobile Cover Poster
+    window.__renderCover = function () {
+      window.__setTime(6.8);
+      $('act-hero').style.opacity = 0;
+      $('act-hook').style.opacity = 0;
+      $('act-outro').style.opacity = 0;
+      $('hud-top').style.opacity = 0;
+      $('mobile-headline').style.opacity = 0;
+      $('timeline-fill').style.width = '0%';
+      $('cover-header').style.opacity = 1;
+
+      const sf = $('stage-frame');
+      const cam = $('product-camera');
+      const focusRing = $('focus-ring');
+      sf.style.opacity = 1;
+      sf.style.top = '488px';
+      sf.style.height = '980px';
+      $('frame-glow').style.background = 'radial-gradient(circle at 50% 45%, rgba(62, 198, 145, 0.58), transparent 68%)';
+      setScreenOpacities({ 'scr-missions-typed': 1 });
+
+      const c = focusAt(700, 450, 1.15);
+      cam.style.transform = `translate3d(${c.tx}px, ${c.ty}px, 0) scale(${c.sc}) rotateX(2deg) rotateY(-1deg)`;
+      $('glass-sheen').style.transform = 'translateX(12%)';
+
+      focusRing.style.opacity = 0.94;
+      applyFocusBox(focusRing, COORDS.forecast, 2, '#5ce0ab');
+
+      setKpi(1, '-50%', '#73f7bb', '难度路由实测算力省费', 'Win · Mac · Linux · npx 一键启动', 'rgba(93, 226, 174, 0.5)');
+    };
+
+    window.__setTime(0);
+  </script>
+</body>
+</html>
