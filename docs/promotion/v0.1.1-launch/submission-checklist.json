@@ -18,6 +18,25 @@
       "action": "已通过 gh repo edit 配置官网链接与 12 个高意图 Topics 标签",
       "url": "https://github.com/gemron/Termexo-Fleet"
     },
+    "githubReleaseMedia": {
+      "status": "已完成",
+      "action": "已将 16:9 横屏与 9:16 竖屏 60fps 宣传片及封面上传至 v0.1.1 Release",
+      "url": "https://github.com/gemron/Termexo-Fleet/releases/tag/v0.1.1"
+    },
+    "hellogithub": {
+      "status": "已提交",
+      "url": "https://github.com/521xueweihan/HelloGitHub/issues/4577",
+      "aiDisclosure": true
+    },
+    "ruanyfWeekly": {
+      "status": "已提交",
+      "url": "https://github.com/ruanyf/weekly/issues/13916",
+      "aiDisclosure": true
+    },
+    "awesomeMcpClients": {
+      "status": "已提交 PR",
+      "url": "https://github.com/punkpeye/awesome-mcp-clients/pull/443"
+    },
     "oschina": {
       "status": "待提交",
       "submitUrl": "https://my.oschina.net/u/223115/blog/write",
