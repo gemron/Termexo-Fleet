@@ -38,89 +38,107 @@
       "url": "https://github.com/punkpeye/awesome-mcp-clients/pull/443"
     },
     "oschina": {
-      "status": "待提交",
-      "submitUrl": "https://my.oschina.net/u/223115/blog/write",
-      "newsUrl": "https://www.oschina.net/news/add",
+      "status": "已发布",
+      "url": "https://my.oschina.net/u/223115/blog/19814282",
       "draft": "01-oschina.md",
-      "aiDisclosure": true
+      "aiDisclosure": true,
+      "note": "通过新版 ai-write 发布成功；建议抽查正文 GitHub 外链图在无代理网络下是否正常展示"
     },
     "zhihu": {
-      "status": "待提交",
-      "submitUrl": "https://zhuanlan.zhihu.com/write",
+      "status": "已发布",
+      "url": "https://zhuanlan.zhihu.com/p/2110001112858286032",
       "draft": "02-zhihu.md",
-      "aiDisclosure": true
+      "image": true,
+      "aiDisclosure": true,
+      "note": "已上传封面及全部 3 张本地截图至知乎 CDN，并勾选官方「包含 AI 辅助创作」声明"
     },
     "juejin": {
-      "status": "待提交",
-      "submitUrl": "https://juejin.cn/editor/drafts/new",
+      "status": "已发布",
+      "url": "https://juejin.cn/spost/7712793007699984393",
       "draft": "03-juejin.md",
-      "aiDisclosure": true
+      "image": true,
+      "aiDisclosure": true,
+      "note": "分类：人工智能；标签：人工智能、Rust"
     },
     "csdn": {
-      "status": "待提交",
-      "submitUrl": "https://editor.csdn.net/md/",
+      "status": "已发布（审核中）",
+      "url": "https://blog.csdn.net/guomengyue1987/article/details/171549580",
       "draft": "04-csdn.md",
+      "image": true,
+      "aiDisclosure": true,
+      "note": "已本地上传封面与 06-analytics-notify.png；标签：AI编程、开源、人工智能"
+    },
+    "producthunt": {
+      "status": "论坛已发布 + 主发布页已排期",
+      "forumUrl": "https://www.producthunt.com/p/termexo/termexo-fleet-v0-1-1-local-first-ai-coding-fleet-commander-with-zero-black-box",
+      "scheduledLaunchUrl": "https://www.producthunt.com/products/termexo?launch=termexo-fleet",
+      "draft": "07-producthunt.md",
+      "image": true,
+      "aiDisclosure": true,
+      "note": "已检测到你排期于 2026-11-28 12:01 AM PT 的正式 Launch（未重复新建）；上线后可粘贴 07-producthunt.md 的 First Maker Comment"
+    },
+    "bilibili": {
+      "status": "已投稿（转码审核中）",
+      "url": "https://www.bilibili.com/video/BV1ed1NzuEbR",
+      "archiveUrl": "https://member.bilibili.com/platform/upload-manager/archive-process?bvid=BV1ed1NzuEbR",
+      "media": "docs/promo/termexo-fleet-promo.mp4",
+      "draft": "09-short-video-social.md",
+      "aiDisclosure": true,
+      "note": "已上传 16:9 1080p60 45s 成片与封面，分类人工智能，含 8 个标签与时间轴章节"
+    },
+    "x": {
+      "status": "已发布（双推文串 + 45s 视频）",
+      "url": "https://x.com/gemronguo/status/2126551431415288148",
+      "replyUrl": "https://x.com/gemronguo/status/2126551433827008617",
+      "media": "docs/promo/termexo-fleet-promo.mp4",
+      "draft": "09-short-video-social.md",
+      "aiDisclosure": true
+    },
+    "weibo": {
+      "status": "已发布",
+      "url": "https://weibo.com/1906408514/RtsNUAxcJ",
+      "media": "docs/promo/termexo-fleet-promo-cover.png",
+      "draft": "09-short-video-social.md",
       "aiDisclosure": true
     },
     "segmentfault": {
-      "status": "待提交",
+      "status": "待登录",
       "submitUrl": "https://segmentfault.com/write",
       "draft": "05-segmentfault.md",
-      "aiDisclosure": true
+      "blocker": "未登录（跳转登录页）"
     },
     "v2ex": {
-      "status": "待提交",
+      "status": "待人工过盾",
       "submitUrl": "https://www.v2ex.com/write?node=create",
       "draft": "06-v2ex.md",
-      "aiDisclosure": false
-    },
-    "producthunt": {
-      "status": "待提交",
-      "submitUrl": "https://www.producthunt.com/posts/new",
-      "draft": "07-producthunt.md",
-      "aiDisclosure": true
+      "blocker": "Cloudflare 人机校验拦截"
     },
     "medium": {
-      "status": "待提交",
+      "status": "待人工过盾",
       "submitUrl": "https://medium.com/new-story",
       "draft": "08-medium.md",
-      "aiDisclosure": true
-    },
-    "bilibili": {
-      "status": "待提交",
-      "submitUrl": "https://member.bilibili.com/platform/upload/video/frame",
-      "media": "docs/promo/termexo-fleet-promo.mp4",
-      "draft": "09-short-video-social.md"
+      "blocker": "Cloudflare Turnstile / CDN 校验（账号已登录 Gemron Guo）"
     },
     "douyin": {
-      "status": "待提交",
+      "status": "待扫码登录",
       "submitUrl": "https://creator.douyin.com/creator-micro/content/upload",
       "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
-      "draft": "09-short-video-social.md"
+      "draft": "09-short-video-social.md",
+      "blocker": "未登录（需扫码或短信登录）"
     },
     "wechatChannels": {
-      "status": "待提交",
+      "status": "待扫码登录",
       "submitUrl": "https://channels.weixin.qq.com/platform/post/create",
       "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
-      "draft": "09-short-video-social.md"
+      "draft": "09-short-video-social.md",
+      "blocker": "未登录（需微信扫码登录）"
     },
     "xiaohongshu": {
-      "status": "待提交",
+      "status": "待短信登录",
       "submitUrl": "https://creator.xiaohongshu.com/publish/publish",
       "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
-      "draft": "09-short-video-social.md"
-    },
-    "x": {
-      "status": "待提交",
-      "submitUrl": "https://x.com/compose/post",
-      "media": "docs/promo/termexo-fleet-promo.mp4",
-      "draft": "09-short-video-social.md"
-    },
-    "weibo": {
-      "status": "待提交",
-      "submitUrl": "https://weibo.com/",
-      "media": "docs/promo/termexo-fleet-promo-vertical.mp4",
-      "draft": "09-short-video-social.md"
+      "draft": "09-short-video-social.md",
+      "blocker": "未登录（需短信登录）"
     }
   },
   "excludedPlatforms": {
